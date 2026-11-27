@@ -362,7 +362,7 @@ private slots:
         }
 
         character = original;
-        const auto sword = character.character.value("slottedRightHands").toArray().first();
+        const QJsonValue sword = character.character.value("slottedRightHands").toArray().first();
         character.character.insert("slottedRightHands", QJsonArray{sword, sword});
         QVERIFY(Equipment::read(character, catalog, model, error));
         QCOMPARE(model.find({Kind::RightHand, 0})->status, Status::Invalid);

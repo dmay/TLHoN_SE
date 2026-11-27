@@ -23,7 +23,7 @@ QByteArray fixture(const QString &name)
     return read(QDir(FIXTURE_DIR).filePath(name));
 }
 const QByteArray marker = "~NoticeMeSenpaiNoticeMe~";
-const QByteArray slot = R"({"name":"hello;~SettingsSplit~;~NoticeMeSenpaiNoticeMe~","unknown":{"x":"\"}\\;"},"memory":1};{"a":1};{"q":2};{"misc":"~NoticeMeSenpaiNoticeMe~;"};opaque data;)";
+const QByteArray slot = "{\"name\":\"hello;~SettingsSplit~;~NoticeMeSenpaiNoticeMe~\",\"unknown\":{\"x\":\"\\\"}\\\\;\"},\"memory\":1};{\"a\":1};{\"q\":2};{\"misc\":\"~NoticeMeSenpaiNoticeMe~;\"};opaque data;";
 }
 
 class SaveCoreTests : public QObject

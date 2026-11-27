@@ -9,6 +9,7 @@
 #include "positiveintvalidator.h"
 
 #include <QMessageBox>
+#include <QCursor>
 #include <QStringList>
 #include <QSignalBlocker>
 #include <QTimer>
@@ -144,8 +145,8 @@ QString Tab_Settings::restoreSnapshot(const QString &id, QWidget *parent)
         QMessageBox::warning(owner, tr("Restore blocked"), error);
         return tr("Restore blocked: %1").arg(error);
     }
-    QString details = tr("Snapshot: %1\nSource: %2\nTarget: %3\n\nFiles:")
-        .arg(preview.snapshot.id, preview.snapshot.sourceDirectory, preview.targetDirectory);
+    QString details = tr("Snapshot: %1\nLabel: %2\nSource: %3\nTarget: %4\n\nFiles:")
+        .arg(preview.snapshot.id, preview.snapshot.label, preview.snapshot.sourceDirectory, preview.targetDirectory);
     QStringList summary;
     for (const auto &file : preview.snapshot.files) {
         if (file.state == BackupFileState::Present) {
@@ -179,6 +180,7 @@ QString Tab_Settings::restoreSnapshot(const QString &id, QWidget *parent)
     if (confirm.exec() != QMessageBox::Yes) return tr("Restore canceled.");
 
     BackupSnapshot safety;
+    QApplication::setOverrideCursor(Qt::WaitCursor);
     const bool restored = service.restore(preview, safety, error);
     QString reloadError;
     if (RestoreService::hasPending(JsonParser::paths())) {
@@ -190,6 +192,7 @@ QString Tab_Settings::restoreSnapshot(const QString &id, QWidget *parent)
     loadGameSaves();
     showSaveStatus(reloadError);
     emit saveRestored();
+    QApplication::restoreOverrideCursor();
     if (restored) {
         const QString result = tr("Restored and verified. Pre-restore safety snapshot: %1").arg(safety.id) +
             (reloadError.isEmpty() ? QString() : "\n" + tr("Reload warning: %1").arg(reloadError));

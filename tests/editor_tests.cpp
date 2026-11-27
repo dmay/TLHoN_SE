@@ -153,8 +153,7 @@ private slots:
         QTRY_VERIFY(!create->isEnabled() && !restore->isEnabled() && !remove->isEnabled());
         stub.closed = true;
         stub.valid = false;
-        refresh->click();
-        QVERIFY(!create->isEnabled() && !remove->isEnabled() && restore->isEnabled());
+        QTRY_VERIFY(!create->isEnabled() && !remove->isEnabled() && restore->isEnabled());
         restore->click();
         QCOMPARE(stub.restoreCalls, 1);
         stub.pending = true;
@@ -179,6 +178,12 @@ private slots:
         const auto paths = JsonParser::paths();
         QVERIFY(QFile::copy(QDir(FIXTURE_DIR).filePath("SaveData.txt"), paths.primary()));
         QVERIFY(QFile::copy(QDir(FIXTURE_DIR).filePath("SaveData1.txt"), paths.gameBackup()));
+        const auto read = [](const QString &path) {
+            QFile file(path);
+            return file.open(QIODevice::ReadOnly) ? file.readAll() : QByteArray();
+        };
+        const auto originalPrimary = read(paths.primary());
+        const auto originalCompanion = read(paths.gameBackup());
         QString error;
         QVERIFY2(JsonParser::init(error), qPrintable(error));
         QSettings settings("DeathWhisper", "TLHoN_SE");
@@ -247,7 +252,8 @@ private slots:
         QVERIFY(renamedVisible);
         QVERIFY(service.list(snapshots, error));
         QVERIFY(snapshots.isEmpty());
-        QVERIFY(QFile::exists(paths.primary()) && QFile::exists(paths.gameBackup()));
+        QCOMPARE(read(paths.primary()), originalPrimary);
+        QCOMPARE(read(paths.gameBackup()), originalCompanion);
     }
     void restoreSnapshotFromSettings()
     {

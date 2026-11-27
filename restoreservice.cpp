@@ -266,27 +266,27 @@ bool RestoreService::gameClosed(QString &error)
     // Steam app 1766100, Windows depot 1766101: TLHON.exe.
     HANDLE processes = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (processes == INVALID_HANDLE_VALUE)
-        return fail(error, "Could not check running processes. Restore blocked.");
+        return fail(error, "Could not check running processes. Save/backup change blocked.");
     PROCESSENTRY32W entry{};
     entry.dwSize = sizeof(entry);
     if (!Process32FirstW(processes, &entry)) {
         CloseHandle(processes);
-        return fail(error, "Could not enumerate running processes. Restore blocked.");
+        return fail(error, "Could not enumerate running processes. Save/backup change blocked.");
     }
     do {
         if (QString::fromWCharArray(entry.szExeFile).compare("TLHON.exe", Qt::CaseInsensitive) == 0) {
             CloseHandle(processes);
-            return fail(error, "The game (TLHON.exe) is running. Close it before restoring.");
+            return fail(error, "The game (TLHON.exe) is running. Close it before changing saves or backups.");
         }
     } while (Process32NextW(processes, &entry));
     const auto enumerationError = GetLastError();
     CloseHandle(processes);
     if (enumerationError != ERROR_NO_MORE_FILES)
-        return fail(error, "Could not finish checking running processes. Restore blocked.");
+        return fail(error, "Could not finish checking running processes. Save/backup change blocked.");
     error.clear();
     return true;
 #else
-    return fail(error, "Automatic game process detection is supported only on Windows. Restore blocked.");
+    return fail(error, "Automatic game process detection is supported only on Windows. Save/backup change blocked.");
 #endif
 }
 

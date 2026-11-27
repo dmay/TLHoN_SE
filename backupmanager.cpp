@@ -103,8 +103,8 @@ public:
 };
 }
 
-BackupManager::BackupManager(BackupManagerBackend &backend, QWidget *parent)
-    : QDialog(parent), backend(backend)
+BackupManager::BackupManager(BackupManagerBackend &backendRef, QWidget *parent)
+    : QDialog(parent), backend(backendRef)
 {
     setObjectName("backupManager");
     setWindowTitle(tr("Менеджер резервных копий"));
@@ -222,7 +222,6 @@ void BackupManager::refresh(const QString &preferred)
         entries.clear();
         feedback(tr("Не удалось получить список копий: %1").arg(error));
     }
-    activeReady = backend.activeValid(activeError);
     table->setRowCount(0);
     table->setRowCount(entries.size());
     int choose = -1;
@@ -283,6 +282,7 @@ void BackupManager::updateActions()
     QString gameError;
     const bool closed = backend.gameClosed(gameError);
     const bool pending = backend.pendingRecovery();
+    activeReady = !pending && closed && backend.activeValid(activeError);
     const bool ready = catalogReady && closed && !pending;
     const auto *entry = selected();
     const bool editable = entry && entry->snapshot.valid && entry->snapshot.kind != BackupKind::Safety;

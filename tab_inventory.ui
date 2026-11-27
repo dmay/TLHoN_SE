@@ -4,6 +4,60 @@
  <widget class="QWidget" name="Tab_Inventory">
   <layout class="QVBoxLayout" name="inventoryLayout">
    <item><widget class="QLabel" name="characterLabel"><property name="textFormat"><enum>Qt::TextFormat::PlainText</enum></property><property name="wordWrap"><bool>true</bool></property></widget></item>
+   <item><widget class="QTabWidget" name="inventoryPages">
+    <widget class="QWidget" name="ownedPage">
+     <attribute name="title"><string>Мои предметы</string></attribute>
+     <layout class="QVBoxLayout" name="ownedLayout">
+      <item><layout class="QHBoxLayout" name="ownedFilters">
+       <item><widget class="QLineEdit" name="ownedSearch"><property name="placeholderText"><string>Название, GUID или ID</string></property><property name="clearButtonEnabled"><bool>true</bool></property></widget></item>
+       <item><widget class="QComboBox" name="arrayFilter"/></item>
+       <item><widget class="QComboBox" name="ownedCategoryFilter"/></item>
+       <item><widget class="QComboBox" name="stateFilter"/></item>
+      </layout></item>
+      <item><widget class="QLabel" name="ownedStatus"><property name="textFormat"><enum>Qt::TextFormat::PlainText</enum></property><property name="wordWrap"><bool>true</bool></property></widget></item>
+      <item><widget class="QSplitter" name="ownedSplitter">
+       <property name="orientation"><enum>Qt::Orientation::Vertical</enum></property>
+       <property name="childrenCollapsible"><bool>false</bool></property>
+       <widget class="QTableWidget" name="ownedTable">
+        <property name="selectionMode"><enum>QAbstractItemView::SelectionMode::SingleSelection</enum></property>
+        <property name="selectionBehavior"><enum>QAbstractItemView::SelectionBehavior::SelectRows</enum></property>
+        <property name="editTriggers"><set>QAbstractItemView::EditTrigger::NoEditTriggers</set></property>
+        <property name="alternatingRowColors"><bool>true</bool></property>
+        <column><property name="text"><string>Название / GUID</string></property></column>
+        <column><property name="text"><string>Массив</string></property></column>
+        <column><property name="text"><string>ID экземпляра</string></property></column>
+        <column><property name="text"><string>Состояние</string></property></column>
+        <column><property name="text"><string>Копий</string></property></column>
+       </widget>
+       <widget class="QWidget" name="ownedDetails">
+        <layout class="QVBoxLayout" name="detailsLayout">
+         <property name="leftMargin"><number>0</number></property><property name="rightMargin"><number>0</number></property>
+         <item><widget class="QLabel" name="selectedInstance"><property name="textFormat"><enum>Qt::TextFormat::PlainText</enum></property><property name="wordWrap"><bool>true</bool></property></widget></item>
+         <item><widget class="QTableWidget" name="propertyTable">
+          <property name="editTriggers"><set>QAbstractItemView::EditTrigger::NoEditTriggers</set></property>
+          <property name="alternatingRowColors"><bool>true</bool></property>
+          <column><property name="text"><string>Поле</string></property></column>
+          <column><property name="text"><string>Сохранено</string></property></column>
+          <column><property name="text"><string>Предлагается</string></property></column>
+          <column><property name="text"><string>Доступ / причина</string></property></column>
+         </widget></item>
+         <item><layout class="QHBoxLayout" name="stateControls">
+          <item><widget class="QLabel" name="reviewedStateLabel"><property name="text"><string>Допустимое состояние:</string></property></widget></item>
+          <item><widget class="QComboBox" name="propertyState"><property name="sizeAdjustPolicy"><enum>QComboBox::SizeAdjustPolicy::AdjustToMinimumContentsLengthWithIcon</enum></property><property name="minimumContentsLength"><number>18</number></property></widget></item>
+         </layout></item>
+         <item><widget class="QLabel" name="propertyStatus"><property name="textFormat"><enum>Qt::TextFormat::PlainText</enum></property><property name="wordWrap"><bool>true</bool></property></widget></item>
+         <item><layout class="QHBoxLayout" name="propertyActions">
+          <item><widget class="QPushButton" name="applyProperties"><property name="text"><string>Применить</string></property></widget></item>
+          <item><widget class="QPushButton" name="cancelProperties"><property name="text"><string>Отмена</string></property></widget></item>
+         </layout></item>
+        </layout>
+       </widget>
+      </widget></item>
+     </layout>
+    </widget>
+    <widget class="QWidget" name="catalogPage">
+     <attribute name="title"><string>Добавить предметы</string></attribute>
+     <layout class="QVBoxLayout" name="catalogLayout">
    <item><layout class="QHBoxLayout" name="catalogControls">
     <item><widget class="QPushButton" name="discoverCatalog"><property name="text"><string>Найти игру в Steam</string></property></widget></item>
     <item><widget class="QPushButton" name="chooseCatalog"><property name="text"><string>Выбрать catalog.json</string></property></widget></item>
@@ -35,6 +89,9 @@
    </widget></item>
    <item><widget class="QLabel" name="editStatus"><property name="textFormat"><enum>Qt::TextFormat::PlainText</enum></property><property name="wordWrap"><bool>true</bool></property></widget></item>
    <item><widget class="QPushButton" name="addSelected"><property name="text"><string>Добавить выбранный предмет</string></property></widget></item>
+     </layout>
+    </widget>
+   </widget></item>
   </layout>
  </widget>
  <resources/>

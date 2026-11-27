@@ -16,6 +16,8 @@
 #include <QMessageBox>
 #include <QTimer>
 #include <QTableWidget>
+#include <QTabWidget>
+#include <QLockFile>
 #include <QPlainTextEdit>
 #include <QLabel>
 #include <QProcess>
@@ -312,6 +314,10 @@ private slots:
         character->setCurrentIndex(1);
         openInventory->click();
         QVERIFY(inventory->isVisible());
+        auto *pages = inventory->findChild<QTabWidget *>("inventoryPages");
+        QVERIFY(pages);
+        pages->setCurrentIndex(1);
+        QVERIFY(add->isVisible());
         QVERIFY(!add->isEnabled());
         QCOMPARE(table->rowCount(), 0);
         QVERIFY(!inventory->loadCatalog({dir.filePath("missing.json"), {}}));
@@ -405,6 +411,19 @@ private slots:
         QCOMPARE(armor.infos.size(), 1);
         QVERIFY(armor.infos.first().contains("Items added: 1"));
         QVERIFY(!add->isEnabled());
+        auto *ownedSearch = inventory->findChild<QLineEdit *>("ownedSearch");
+        auto *ownedTable = inventory->findChild<QTableWidget *>("ownedTable");
+        auto *ownedCategory = inventory->findChild<QComboBox *>("ownedCategoryFilter");
+        QVERIFY(ownedSearch && ownedTable && ownedCategory);
+        ownedSearch->setText("Sample Helmet");
+        QCOMPARE(ownedTable->rowCount(), 1);
+        QCOMPARE(ownedTable->item(0, 0)->text(), QString("Sample Helmet"));
+        ownedCategory->setCurrentIndex(2); // weapons only
+        QCOMPARE(ownedTable->rowCount(), 0);
+        ownedCategory->setCurrentIndex(1); // armor only
+        QCOMPARE(ownedTable->rowCount(), 1);
+        ownedSearch->clear();
+        ownedCategory->setCurrentIndex(0);
         QVERIFY(select("TestSword") >= 0);
         QVERIFY(preview->toPlainText().contains("inventoryWeapons"));
         const auto sword = press(add, true);
@@ -487,6 +506,279 @@ private slots:
         QVERIFY(QFile::remove(paths.primary()));
         settings->reloadSave();
         QVERIFY(!add->isEnabled() && !allArmor->isEnabled());
+        QVERIFY(!QFile::exists(paths.primary()));
+    }
+
+    void ownedInventoryPropertyUi()
+    {
+        QTemporaryDir saves, prefs, storage;
+        QVERIFY(saves.isValid() && prefs.isValid() && storage.isValid());
+        QSettings::setDefaultFormat(QSettings::IniFormat);
+        QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, prefs.path());
+        JsonParser::configure(SavePaths(saves.path()));
+        const auto paths = JsonParser::paths();
+        const auto put = [](const QString &path, const QByteArray &bytes) {
+            QFile f(path);
+            return f.open(QIODevice::WriteOnly) && f.write(bytes) == bytes.size() && f.flush();
+        };
+        const auto read = [](const QString &path) {
+            QFile f(path);
+            return f.open(QIODevice::ReadOnly) ? f.readAll() : QByteArray{};
+        };
+        QString error;
+        SaveDocument original;
+        QVERIFY2(SaveDocument::parse(read(QDir(FIXTURE_DIR).filePath("SaveData.txt")), original, error), qPrintable(error));
+        auto &slot = original.editCharacter(1);
+        auto generic = slot.character.value("inventory").toArray();
+        auto weapons = slot.character.value("inventoryWeapons").toArray();
+        const auto indexOf = [](const QJsonArray &array, const QString &guid) {
+            for (qsizetype i = 0; i < array.size(); ++i)
+                if (array.at(i).toObject().value("GUID").toString() == guid) return i;
+            return qsizetype(-1);
+        };
+        const auto firstIndex = indexOf(generic, "Consumable_SlowStaminaRestore");
+        const auto weaponIndex = indexOf(weapons, "PlotThreadScissors_Dagger");
+        QVERIFY(firstIndex >= 0 && weaponIndex >= 0);
+        auto item = generic.at(firstIndex).toObject();
+        const auto weapon = weapons.at(weaponIndex).toObject();
+        const auto id = item.value("instanceIDOnCreation").toString();
+        const auto weaponId = weapon.value("instanceIDOnCreation").toString();
+        item["futureProperty"] = QJsonObject{{"nested", QJsonArray{2, "keep"}}};
+        generic.replace(firstIndex, item);
+        auto duplicate = item;
+        duplicate["instanceIDOnCreation"] = "test-duplicate";
+        generic.append(duplicate);
+        auto unknown = item;
+        unknown["GUID"] = "Unknown_Future_Item";
+        unknown["instanceIDOnCreation"] = "unknown-id";
+        generic.append(unknown);
+        // Array-scoped IDs: the same text is legal in a different array.
+        auto crossArray = weapon;
+        crossArray["GUID"] = "Unknown_Weapon";
+        crossArray["instanceIDOnCreation"] = "test-duplicate";
+        weapons.append(crossArray);
+        slot.character["inventory"] = generic;
+        slot.character["inventoryWeapons"] = weapons;
+        slot.character["equipedConsumables"] = QJsonArray{id, "NULL", "NULL", "NULL", "NULL"};
+        const auto baseline = original.serialize();
+        QVERIFY(put(paths.primary(), baseline));
+        QVERIFY(put(paths.gameBackup(), "companion"));
+        QVERIFY(put(paths.legacyEditorBackup(), "legacy"));
+        QSettings settings("DeathWhisper", "TLHoN_SE");
+        QVERIFY2(BackupService::configureStorageDirectory(settings, paths, storage.path(), error), qPrintable(error));
+        BackupService backups(paths, storage.path());
+        BackupSnapshot snapshot;
+        QVERIFY2(backups.createSnapshot("Before property edits", snapshot, error), qPrintable(error));
+        QVERIFY2(JsonParser::init(error), qPrintable(error));
+
+        MainWindow window;
+        window.show();
+        auto *inventory = window.findChild<Tab_Inventory *>();
+        auto *tab = window.findChild<Tab_Settings *>();
+        QVERIFY(inventory && tab);
+        auto *selector = tab->findChild<QComboBox *>("cb_saves");
+        auto *search = inventory->findChild<QLineEdit *>("ownedSearch");
+        auto *arrayFilter = inventory->findChild<QComboBox *>("arrayFilter");
+        auto *stateFilter = inventory->findChild<QComboBox *>("stateFilter");
+        auto *rows = inventory->findChild<QTableWidget *>("ownedTable");
+        auto *details = inventory->findChild<QTableWidget *>("propertyTable");
+        auto *states = inventory->findChild<QComboBox *>("propertyState");
+        auto *apply = inventory->findChild<QPushButton *>("applyProperties");
+        auto *cancel = inventory->findChild<QPushButton *>("cancelProperties");
+        auto *status = inventory->findChild<QLabel *>("propertyStatus");
+        QVERIFY(selector && search && arrayFilter && stateFilter && rows && details && states && apply && cancel && status);
+        selector->setCurrentIndex(1);
+        window.findChild<QPushButton *>("btn_inventory")->click();
+        QVERIFY(rows->isVisible());
+        QCOMPARE(rows->rowCount(), generic.size() + weapons.size()); // works without a catalog
+        arrayFilter->setCurrentIndex(1);
+        QCOMPARE(rows->rowCount(), generic.size());
+        arrayFilter->setCurrentIndex(2);
+        QCOMPARE(rows->rowCount(), weapons.size());
+        arrayFilter->setCurrentIndex(0);
+        search->setText("test-duplicate");
+        QCOMPARE(rows->rowCount(), 2); // identical ID text, distinct arrays
+        search->setText("Consumable_SlowStaminaRestore");
+        QCOMPARE(rows->rowCount(), 2);
+        QCOMPARE(rows->item(0, 4)->text(), QString("2"));
+        QCOMPARE(rows->item(1, 4)->text(), QString("2"));
+        stateFilter->setCurrentIndex(1); // seen only
+        QCOMPARE(rows->rowCount(), 0);
+        stateFilter->setCurrentIndex(2); // unseen
+        QCOMPARE(rows->rowCount(), 2);
+        stateFilter->setCurrentIndex(0);
+        const auto select = [&](Inventory::ArrayKind kind, const QString &id) {
+            for (int row = 0; row < rows->rowCount(); ++row) {
+                if (rows->item(row, 0)->data(Qt::UserRole).toString() == id &&
+                    rows->item(row, 0)->data(Qt::UserRole + 1).toInt() == int(kind)) {
+                    rows->selectRow(row);
+                    return true;
+                }
+            }
+            return false;
+        };
+        const auto value = [&](const QString &key, int column) {
+            for (int row = 0; row < details->rowCount(); ++row)
+                if (details->item(row, 0)->text() == key) return details->item(row, column)->text();
+            return QString();
+        };
+        QVERIFY(select(Inventory::ArrayKind::Generic, id));
+        QCOMPARE(value("uses", 1), QString("1"));
+        QVERIFY(value("futureProperty", 3).contains("Read-only"));
+        QVERIFY(value("futureProperty", 1).contains("nested"));
+        QVERIFY(value("instanceIDOnCreation", 3).contains("Read-only"));
+        QCOMPARE(states->count(), 2);
+        QVERIFY(!states->isEditable() && !apply->isEnabled());
+        const auto staged = [&] {
+            states->setCurrentIndex(1 - states->currentIndex());
+        };
+        staged();
+        QVERIFY(apply->isEnabled() && cancel->isEnabled());
+        QCOMPARE(value("uses", 1), QString("1"));
+        QCOMPARE(value("uses", 2), QString("2"));
+        QCOMPARE(value("hasSeen", 2), QString("true"));
+        QCOMPARE(read(paths.primary()), baseline);
+        cancel->click();
+        QVERIFY(!apply->isEnabled());
+        QCOMPARE(value("uses", 2), QString("1"));
+        staged();
+
+        // A filter never changes the edit target. Declining a row/character
+        // switch keeps that same draft; accepting discards without writing.
+        search->setText("Unknown_Weapon");
+        QCOMPARE(rows->rowCount(), 1);
+        QVERIFY(apply->isEnabled());
+        auto answerNext = [&](bool yes) {
+            QTimer::singleShot(0, &window, [yes] {
+                if (auto *box = qobject_cast<QMessageBox *>(QApplication::activeModalWidget()))
+                    box->button(yes ? QMessageBox::Yes : QMessageBox::No)->click();
+            });
+        };
+        answerNext(false);
+        QVERIFY(select(Inventory::ArrayKind::Weapon, "test-duplicate"));
+        QCOMPARE(value("uses", 2), QString("2"));
+        QVERIFY(apply->isEnabled());
+        answerNext(false);
+        selector->setCurrentIndex(0);
+        QCOMPARE(selector->currentIndex(), 1);
+        QVERIFY(apply->isEnabled());
+        answerNext(true);
+        selector->setCurrentIndex(0);
+        QCOMPARE(selector->currentIndex(), 0);
+        QVERIFY(!apply->isEnabled());
+        QCOMPARE(read(paths.primary()), baseline);
+        selector->setCurrentIndex(1);
+        search->setText("Consumable_SlowStaminaRestore");
+        QVERIFY(select(Inventory::ArrayKind::Generic, id));
+        staged();
+        // A programmatically invalid target cannot bypass the checked service.
+        const auto alternate = states->currentIndex();
+        const auto legal = states->itemData(alternate);
+        states->setItemData(alternate, QVariantMap{{"uses", 9999}, {"hasSeen", true}});
+        apply->click();
+        QVERIFY(status->text().contains("Save not changed"));
+        QCOMPARE(read(paths.primary()), baseline);
+        // Refresh rebuilt the native reviewed options, not the injected value.
+        QVERIFY(!apply->isEnabled());
+        QCOMPARE(states->itemData(alternate), legal);
+        staged();
+        // Another editor owns the save lock: the attempted commit is rejected.
+        QLockFile lock(paths.primary() + ".editor.lock");
+        QVERIFY(lock.tryLock(0));
+        apply->click();
+        QVERIFY(status->text().contains("Save not changed"));
+        QCOMPARE(read(paths.primary()), baseline);
+        lock.unlock();
+        QVERIFY(apply->isEnabled());
+        apply->click();
+        QVERIFY(!apply->isEnabled());
+        QCOMPARE(value("uses", 1), QString("2"));
+        auto expected = original;
+        auto updated = item;
+        updated["uses"] = 2;
+        updated["hasSeen"] = true;
+        generic.replace(firstIndex, updated);
+        expected.editCharacter(1).character["inventory"] = generic;
+        QCOMPARE(read(paths.primary()), expected.serialize());
+        QVERIFY(select(Inventory::ArrayKind::Generic, "test-duplicate"));
+        QCOMPARE(value("uses", 1), QString("1")); // other copy untouched
+        QVERIFY(!apply->isEnabled());
+        search->setText("Unknown_Future_Item");
+        QVERIFY(select(Inventory::ArrayKind::Generic, "unknown-id"));
+        QVERIFY(!states->isEnabled() && !apply->isEnabled());
+        QVERIFY(value("futureProperty", 1).contains("keep"));
+        search->setText("PlotThreadScissors_Dagger");
+        QVERIFY(select(Inventory::ArrayKind::Weapon, weaponId));
+        QVERIFY(value("level", 3).contains("Read-only"));
+        QVERIFY(value("infusionType", 3).contains("Read-only"));
+        QCOMPARE(states->count(), 2);
+        staged();
+        apply->click();
+        auto updatedWeapon = weapon;
+        updatedWeapon["hasSeen"] = !weapon.value("hasSeen").toBool();
+        weapons.replace(weaponIndex, updatedWeapon);
+        expected.editCharacter(1).character["inventoryWeapons"] = weapons;
+        QCOMPARE(read(paths.primary()), expected.serialize());
+        QCOMPARE(read(paths.gameBackup()), QByteArray("companion"));
+        QCOMPARE(read(paths.legacyEditorBackup()), QByteArray("legacy"));
+
+        // Reload validates persistence, does not write, and must not apply a draft.
+        QCOMPARE(tab->reloadSave(), QString("Save reloaded."));
+        QVERIFY(select(Inventory::ArrayKind::Weapon, weaponId));
+        QCOMPARE(value("hasSeen", 1), updatedWeapon["hasSeen"].toBool() ? QString("true") : QString("false"));
+        staged();
+        answerNext(false);
+        QCOMPARE(tab->reloadSave(), QString("Reload canceled."));
+        QVERIFY(apply->isEnabled());
+        QCOMPARE(read(paths.primary()), expected.serialize());
+
+        // A confirmed restoration separately asks to discard the draft.
+        auto restore = [&](bool discard) {
+            QTimer timer;
+            connect(&timer, &QTimer::timeout, &window, [&] {
+                auto *box = qobject_cast<QMessageBox *>(QApplication::activeModalWidget());
+                if (!box || box->property("testHandled").toBool()) return;
+                box->setProperty("testHandled", true);
+                auto *button = box->button(box->windowTitle() == "Confirm restore" ? QMessageBox::Yes :
+                    box->windowTitle() == "Unsaved changes" ? (discard ? QMessageBox::Yes : QMessageBox::No) : QMessageBox::Ok);
+                if (button) QTimer::singleShot(0, button, [button] { button->click(); });
+            });
+            timer.start(5);
+            const auto result = tab->restoreSnapshot(snapshot.id);
+            timer.stop();
+            return result;
+        };
+        QVERIFY(restore(false).contains("canceled", Qt::CaseInsensitive));
+        QVERIFY(apply->isEnabled());
+        QCOMPARE(read(paths.primary()), expected.serialize());
+        QVERIFY(restore(true).contains("Restored and verified"));
+        QCOMPARE(read(paths.primary()), baseline);
+        QVERIFY(!apply->isEnabled());
+        QVERIFY(select(Inventory::ArrayKind::Weapon, weaponId));
+        QCOMPARE(value("hasSeen", 1), weapon.value("hasSeen").toBool() ? QString("true") : QString("false"));
+
+        // Externally changed bytes fail closed, even if the selected item
+        // in the in-memory document has not changed.
+        staged();
+        auto external = original;
+        external.editCharacter(0).character["memory"] = 123456;
+        QVERIFY(put(paths.primary(), external.serialize()));
+        apply->click();
+        QCOMPARE(read(paths.primary()), external.serialize());
+        QVERIFY(!apply->isEnabled());
+        // Discard draft, then reload malformed inventory; browsing is blocked.
+        cancel->click();
+        external.editCharacter(1).character["inventory"] = QJsonObject{};
+        QVERIFY(put(paths.primary(), external.serialize()));
+        tab->reloadSave();
+        QCOMPARE(rows->rowCount(), 0);
+        QVERIFY(!states->isEnabled() && !apply->isEnabled());
+        QVERIFY(inventory->findChild<QLabel *>("ownedStatus")->text().contains("Cannot read inventory"));
+        QCOMPARE(read(paths.primary()), external.serialize());
+        QVERIFY(QFile::remove(paths.primary()));
+        tab->reloadSave();
+        QCOMPARE(rows->rowCount(), 0);
+        QVERIFY(!apply->isEnabled());
         QVERIFY(!QFile::exists(paths.primary()));
     }
 

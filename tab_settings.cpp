@@ -76,8 +76,22 @@ Tab_Settings::~Tab_Settings()
     delete validator;
 }
 
+bool Tab_Settings::allowSaveContextChange()
+{
+    bool allowed = true;
+    emit saveContextChanging(&allowed);
+    return allowed;
+}
+
 void Tab_Settings::on_cb_saves_currentIndexChanged(int index)
 {
+    // loadGameSaves rebuilds the combo under a signal blocker after reload.
+    // Only the live, user-driven selection needs a pre-change veto.
+    if (!ui->cb_saves->signalsBlocked() && index != characterId && !allowSaveContextChange()) {
+        const QSignalBlocker blocker(ui->cb_saves);
+        ui->cb_saves->setCurrentIndex(characterId);
+        return;
+    }
     const auto &characters = JsonParser::characters();
     characterId = index >= 0 && index < characters.size() ? index : -1;
     const QSignalBlocker blocker(ui->le_maxIconUses);
@@ -126,6 +140,7 @@ void Tab_Settings::on_btn_restore_clicked()
 
 QString Tab_Settings::reloadSave()
 {
+    if (!allowSaveContextChange()) return tr("Reload canceled.");
     QString error;
     const bool loaded = JsonParser::init(error);
     loadGameSaves();
@@ -177,7 +192,7 @@ QString Tab_Settings::restoreSnapshot(const QString &id, QWidget *parent)
     confirm.setInformativeText(tr("Snapshot: %1\nTarget: %2\n%3").arg(
         preview.snapshot.id, preview.targetDirectory, summary.join("\n")));
     confirm.setDetailedText(details);
-    if (confirm.exec() != QMessageBox::Yes) return tr("Restore canceled.");
+    if (confirm.exec() != QMessageBox::Yes || !allowSaveContextChange()) return tr("Restore canceled.");
 
     BackupSnapshot safety;
     QApplication::setOverrideCursor(Qt::WaitCursor);

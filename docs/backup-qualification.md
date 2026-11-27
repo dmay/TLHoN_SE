@@ -25,8 +25,10 @@ Use the exact commands in [.github/workflows/qt-build.yml](../.github/workflows/
 for the clean package launch/exit smoke. That CI step uses fixture copies with
 an explicit `--save-dir`, requires the effective directory in the startup log,
 and compares both SHA-256 hashes after closing the editor. It does not launch
-the installed game. CTest verbose output contains each test's result and
-`QUALIFICATION` hash lines from the fixture lifecycle.
+the installed game. Each CTest suite also writes a QtTest text report (`build/<suite>.txt`).
+The CI evidence step prints the per-case results and requires all
+`QUALIFICATION` hash lines from the fixture lifecycle (Windows may not emit
+QtTest output to the CTest console).
 
 | Suite | Required evidence |
 | --- | --- |
@@ -53,7 +55,9 @@ Source baseline in the repository (SHA-256, file bytes without conversion):
 The fixture lifecycle asserts exact bytes, not just hashes, for capture,
 restore, undo and final restore. The edited primary hash and all observed
 before/after hashes are recorded by CTest; the companion must remain equal
-throughout. The independent packaging smoke logs its own before/after hashes.
+throughout. The independent packaging smoke logs its own before/after hashes. Windows
+checkouts can convert fixture line endings, so compare the actual test-run
+hashes rather than assuming they equal the Git blob baseline.
 
 ## Manual local-game qualification — not run
 

@@ -26,6 +26,21 @@ jobs:
       - name: Test
         run: ctest --test-dir build -C Release --verbose --output-on-failure
 
+      - name: Publish QtTest evidence
+        if: always()
+        shell: pwsh
+        run: |
+          foreach ($suite in @("savecore_tests", "backupservice_tests", "restoreservice_tests", "editor_tests")) {
+            $report = "build/$suite.txt"
+            if (!(Test-Path $report)) { throw "Missing QtTest report: $report" }
+            Get-Content $report
+          }
+          $reports = Get-Content "build/restoreservice_tests.txt" -Raw
+          foreach ($stage in @("before", "after capture", "after edit", "after restore", "safety snapshot", "after undo", "final")) {
+            if ($reports -notmatch ("QUALIFICATION " + $stage + " primary=[0-9a-f]{64} companion=[0-9a-f]{64}")) {
+              throw "Missing hash evidence for $stage"
+            }
+          }
       - name: Install and deploy editor
         shell: pwsh
         run: |

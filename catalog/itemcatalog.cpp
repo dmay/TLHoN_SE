@@ -191,7 +191,9 @@ void classify(Entry &entry, const QStringList &folders)
     }
     entry.reason = "unreviewed-definition";
 
-    if (top == "DLCArmours" || folders.contains("DLC") || folders.contains("DLCWeapons")) {
+    // DLC armor can be nested below Armour in the actual Steam catalog.
+    // Match exact folder components, not GUID substrings.
+    if (folders.contains("DLCArmours") || folders.contains("DLC") || folders.contains("DLCWeapons")) {
         entry.dlc = Dlc::DlcPath;
         entry.reason = "dlc-entitlement-unverified";
     }

@@ -23,3 +23,8 @@ bool JsonParser::mutateCharacter(int index, const std::function<void(SaveCharact
 {
     return store.mutateCharacter(index, mutation, error);
 }
+
+bool JsonParser::mutateCharacterChecked(int index, const SaveStore::CheckedMutation &mutation, QString &error)
+{
+    return store.mutateCharacterChecked(index, mutation, error);
+}

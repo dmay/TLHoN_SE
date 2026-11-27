@@ -50,7 +50,14 @@ SaveStore::SaveStore(SavePaths paths) : savePaths(std::move(paths)) {}
 
 bool SaveStore::canEdit() const
 {
-    return loaded && !RestoreService::hasPending(savePaths) && !current.characters().isEmpty() && writable(savePaths.primary());
+    if (!loaded || RestoreService::hasPending(savePaths) || current.characters().isEmpty() || !writable(savePaths.primary()))
+        return false;
+    QString error;
+#ifdef Q_OS_WIN
+    if (!RestoreService::gameClosed(error)) return false;
+#endif
+    QByteArray actual;
+    return readFile(savePaths.primary(), actual, error) && actual == loadedBytes;
 }
 
 bool SaveStore::load(QString &error)
@@ -87,6 +94,9 @@ bool SaveStore::mutateCharacter(int index, const std::function<void(SaveCharacte
         error = "No valid selected character. Reload or recover the save first.";
         return false;
     }
+#ifdef Q_OS_WIN
+    if (!RestoreService::gameClosed(error)) return false;
+#endif
     // Serialize concurrent writes by cooperating editor instances. The game
     // does not participate in this lock: always close it before editing.
     QLockFile lock(path + ".editor.lock");
@@ -126,7 +136,11 @@ bool SaveStore::mutateCharacter(int index, const std::function<void(SaveCharacte
         return false;
     }
     // Check once more immediately before the atomic replacement.
-    if (!unchanged(path, loadedBytes, error)) {
+    if (!unchanged(path, loadedBytes, error)
+#ifdef Q_OS_WIN
+        || !RestoreService::gameClosed(error)
+#endif
+    ) {
         file.cancelWriting();
         return false;
     }

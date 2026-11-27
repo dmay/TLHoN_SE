@@ -1,9 +1,8 @@
 # Snapshot storage (DIG-118)
 
-Settings → Backup / recovery has temporary actions to create a snapshot, choose
-its storage folder, and import the older editor backup. Close the game first;
-Steam Cloud and the game do not honor editor locks. DIG-119 adds [restore and recovery](restore-recovery.md), and
-DIG-120 replaces the temporary actions with the full Backup Manager.
+Settings → [Backup Manager](backup-manager.md) creates, lists, labels, deletes,
+and restores snapshots, chooses storage, and imports the older editor backup.
+Close the game first; Steam Cloud and the game do not honor editor locks.
 
 - Default root: `%LOCALAPPDATA%/TLHoN_SE/Backups` (Qt generic local data fallback).
 - Preference: `QSettings("DeathWhisper", "TLHoN_SE")`, key

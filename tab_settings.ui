@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>517</width>
+    <width>600</width>
     <height>421</height>
    </rect>
   </property>
@@ -188,7 +188,7 @@
       </size>
      </property>
      <property name="text">
-      <string>Backup / recovery</string>
+      <string>Менеджер резервных копий</string>
      </property>
     </widget>
    </item>

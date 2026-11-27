@@ -26,6 +26,7 @@ set(EDITOR_SOURCES
     tab_stats.cpp tab_stats.h tab_stats.ui
     tab_equipment.cpp tab_equipment.h tab_equipment.ui
     tab_settings.cpp tab_settings.h tab_settings.ui
+    backupmanager.cpp backupmanager.h
     tab_about.cpp tab_about.h tab_about.ui
     positiveintvalidator.cpp positiveintvalidator.h
     resource.qrc
@@ -72,5 +73,5 @@ if(BUILD_TESTING)
     target_link_libraries(editor_tests PRIVATE savecore Qt6::Widgets Qt6::Test)
     target_compile_definitions(editor_tests PRIVATE FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/Resources/Tests")
     add_test(NAME editor_tests COMMAND editor_tests)
-    set_tests_properties(editor_tests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+    set_tests_properties(editor_tests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120)
 endif()

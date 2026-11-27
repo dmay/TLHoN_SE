@@ -90,10 +90,11 @@ Close the game before editing. Each edit compares the active file to the
 loaded bytes before staging and again immediately before atomically replacing
 it; a lock coordinates editor instances. This cannot prevent a game or another
 program that ignores the lock from writing in the final check/replace window.
-The game backup (`SaveData.txt.bak`) and any existing legacy editor backup
-(`SaveData.txt_bckp`) are left untouched. The recovery entry in Settings can
-open the save directory or reload a recovered file; full snapshot management
-and safe restore are tracked separately.
+Ordinary edits leave the game backup (`SaveData.txt.bak`) and any existing
+legacy editor backup (`SaveData.txt_bckp`) untouched. In **Settings → Backup
+Manager**, create and name complete save snapshots, inspect the catalog, and
+restore selected snapshots with an automatic pre-restore safety copy. See
+[Backup Manager](docs/backup-manager.md) and [restore and recovery](docs/restore-recovery.md).
 
 ### Save access API
 

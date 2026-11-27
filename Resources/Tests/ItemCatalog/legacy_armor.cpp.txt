@@ -1,0 +1,7 @@
+// Synthetic legacy-list comparison fixture; not a real allow-list.
+const QList<QString> armor =
+{
+    "WelcomeArmour_TopHat",
+    "MissingArmor",
+    "AvatarBaseSword"
+};

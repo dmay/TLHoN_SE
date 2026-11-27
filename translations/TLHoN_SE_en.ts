@@ -426,6 +426,19 @@
         <source>Вам никто не помогал в убийстве боссов ;)</source>
         <translation>No one helped you kill the bosses ;)</translation>
     </message>
+
+    <message>
+        <source>Использует проверенный каталог на вкладке «Сумка»</source>
+        <translation>Uses the reviewed catalog on the Inventory tab</translation>
+    </message>
+    <message>
+        <source>Добавить недостающую броню</source>
+        <translation>Add all missing armor</translation>
+    </message>
+    <message>
+        <source>Добавить оружие и щиты</source>
+        <translation>Add all missing weapons/shields</translation>
+    </message>
 </context>
 
 <context>
@@ -683,6 +696,265 @@ Profile: %3</translation>
     <message>
         <source>В копии нет основного файла сохранения.</source>
         <translation>Snapshot has no primary save.</translation>
+    </message>
+</context>
+<context>
+    <name>Tab_Inventory</name>
+    <message>
+        <source>Найти игру в Steam</source>
+        <translation>Find Steam game</translation>
+    </message>
+    <message>
+        <source>Выбрать catalog.json</source>
+        <translation>Choose catalog.json</translation>
+    </message>
+    <message>
+        <source>Выбрать список</source>
+        <translation>Choose review</translation>
+    </message>
+    <message>
+        <source>Обновить</source>
+        <translation>Reload</translation>
+    </message>
+    <message>
+        <source>У меня есть требуемое DLC (включить проверенные DLC-предметы)</source>
+        <translation>I own the required DLC (include reviewed DLC items)</translation>
+    </message>
+    <message>
+        <source>Разрешить массовое добавление после проверки на тестовом сохранении</source>
+        <translation>Enable bulk adds after verifying factory defaults on a disposable save</translation>
+    </message>
+    <message>
+        <source>Поиск по названию или точному GUID</source>
+        <translation>Search name or exact GUID</translation>
+    </message>
+    <message>
+        <source>Только доступные и новые</source>
+        <translation>Eligible and missing only</translation>
+    </message>
+    <message>
+        <source>Название / GUID</source>
+        <translation>Name / GUID</translation>
+    </message>
+    <message>
+        <source>Категория</source>
+        <translation>Category</translation>
+    </message>
+    <message>
+        <source>Статус</source>
+        <translation>Status</translation>
+    </message>
+    <message>
+        <source>DLC</source>
+        <translation>DLC</translation>
+    </message>
+    <message>
+        <source>В сумке</source>
+        <translation>Owned</translation>
+    </message>
+    <message>
+        <source>Добавить выбранный предмет</source>
+        <translation>Add selected item</translation>
+    </message>
+    <message>
+        <source>Броня</source>
+        <translation>Armor</translation>
+    </message>
+    <message>
+        <source>Оружие</source>
+        <translation>Weapons</translation>
+    </message>
+    <message>
+        <source>Щиты</source>
+        <translation>Shields</translation>
+    </message>
+    <message>
+        <source>Другое</source>
+        <translation>Other</translation>
+    </message>
+    <message>
+        <source>Проверен</source>
+        <translation>Reviewed</translation>
+    </message>
+    <message>
+        <source>Исключён</source>
+        <translation>Excluded</translation>
+    </message>
+    <message>
+        <source>Не проверен</source>
+        <translation>Unreviewed</translation>
+    </message>
+    <message>
+        <source>Основная игра</source>
+        <translation>Base game</translation>
+    </message>
+    <message>
+        <source>Требует DLC</source>
+        <translation>Requires DLC</translation>
+    </message>
+    <message>
+        <source>Путь DLC</source>
+        <translation>DLC path</translation>
+    </message>
+    <message>
+        <source>Неизвестно</source>
+        <translation>Unknown</translation>
+    </message>
+    <message>
+        <source>Все категории</source>
+        <translation>All categories</translation>
+    </message>
+    <message>
+        <source>JSON (*.json)</source>
+        <translation>JSON (*.json)</translation>
+    </message>
+    <message>
+        <source>Выбрать проверенный список</source>
+        <translation>Choose reviewed allow-list</translation>
+    </message>
+    <message>
+        <source>Нет персонажа</source>
+        <translation>No character</translation>
+    </message>
+    <message>
+        <source>Персонаж %1: %2</source>
+        <translation>Character %1: %2</translation>
+    </message>
+    <message>
+        <source>Выберите персонажа в настройках.</source>
+        <translation>Select a character in Settings.</translation>
+    </message>
+    <message>
+        <source>Откройте каталог игры на вкладке «Сумка».</source>
+        <translation>Load the game catalog on the Inventory tab.</translation>
+    </message>
+    <message>
+        <source>Выберите проверенный список для этой версии каталога. Непроверенные предметы нельзя добавлять.</source>
+        <translation>Choose a reviewed allow-list for this catalog version. Unreviewed items cannot be added.</translation>
+    </message>
+    <message>
+        <source>Редактирование недоступно. Закройте игру, завершите синхронизацию Steam и перезагрузите или восстановите сохранение в настройках.</source>
+        <translation>Editing unavailable. Close the game, finish Steam synchronization, and reload or recover the save in Settings.</translation>
+    </message>
+    <message>
+        <source>Каталог не загружен. Найдите игру в Steam или выберите catalog.json.</source>
+        <translation>No catalog loaded. Discover the Steam game or choose catalog.json.</translation>
+    </message>
+    <message>
+        <source>Каталог: %1 (%2 записей); %3</source>
+        <translation>Catalog: %1 (%2 entries); %3</translation>
+    </message>
+    <message>
+        <source>Список: %1</source>
+        <translation>Review: %1</translation>
+    </message>
+    <message>
+        <source>Нет проверенного списка — только просмотр</source>
+        <translation>No review — browse only</translation>
+    </message>
+    <message>
+        <source>Выберите предмет. Точный GUID и массив назначения будут показаны здесь.</source>
+        <translation>Select an item to preview its exact GUID and destination array.</translation>
+    </message>
+    <message>
+        <source>GUID: %1
+Назначение: %2 (%3)
+Статус: %4; DLC: %5</source>
+        <translation>GUID: %1
+Destination: %2 (%3)
+Status: %4; DLC: %5</translation>
+    </message>
+    <message>
+        <source>Слот: %1</source>
+        <translation>Slot: %1</translation>
+    </message>
+    <message>
+        <source>Уже в сумке: %1</source>
+        <translation>Already owned: %1</translation>
+    </message>
+    <message>
+        <source>DLC не подтверждено.</source>
+        <translation>DLC ownership not confirmed.</translation>
+    </message>
+    <message>
+        <source>Сохранение не изменено</source>
+        <translation>Save not changed</translation>
+    </message>
+    <message>
+        <source>Выберите предмет.</source>
+        <translation>Select an item.</translation>
+    </message>
+    <message>
+        <source>Каталог или проверенный список изменились. Обновите список и повторите добавление.</source>
+        <translation>The catalog or review changed. Reload the list and retry.</translation>
+    </message>
+    <message>
+        <source>Сначала проверьте создание предметов на тестовом сохранении и подтвердите проверку на вкладке «Сумка».</source>
+        <translation>Verify item creation on a disposable save first, then confirm qualification on the Inventory tab.</translation>
+    </message>
+    <message>
+        <source>Вся проверенная броня (inventory)</source>
+        <translation>All reviewed armor (inventory)</translation>
+    </message>
+    <message>
+        <source>Всё проверенное оружие и щиты (inventoryWeapons)</source>
+        <translation>All reviewed weapons and shields (inventoryWeapons)</translation>
+    </message>
+    <message>
+        <source>Предмет не разрешён в текущем каталоге.</source>
+        <translation>The item is not eligible in the current catalog.</translation>
+    </message>
+    <message>
+        <source>%1 (%2)</source>
+        <translation>%1 (%2)</translation>
+    </message>
+    <message>
+        <source>Нет проверенных доступных предметов в этой категории.</source>
+        <translation>No reviewed eligible items in this category.</translation>
+    </message>
+    <message>
+        <source>Нечего добавлять</source>
+        <translation>Nothing to add</translation>
+    </message>
+    <message>
+        <source>Новых предметов: 0. Все разрешённые предметы уже есть.</source>
+        <translation>New items: 0. All eligible items are already owned.</translation>
+    </message>
+    <message>
+        <source>Подтвердить добавление</source>
+        <translation>Confirm addition</translation>
+    </message>
+    <message>
+        <source>%1
+%2
+Добавить: %3; уже есть: %4; не разрешены: %5.
+
+Существующие предметы и экипировка не будут изменены. Закройте игру, завершите синхронизацию Steam и создайте резервную копию. Значения новых предметов требуют проверки в игре.</source>
+        <translation>%1
+%2
+Add: %3; owned: %4; ineligible: %5.
+
+Existing items and equipment are unchanged. Close the game, finish Steam synchronization and create a backup. New item defaults require in-game qualification.</translation>
+    </message>
+    <message>
+        <source>Персонаж или настройки каталога изменились. Повторите добавление.</source>
+        <translation>The character or catalog settings changed. Retry the addition.</translation>
+    </message>
+    <message>
+        <source>Сохранение изменилось после подтверждения. Повторите добавление.</source>
+        <translation>The save changed after confirmation. Retry the addition.</translation>
+    </message>
+    <message>
+        <source>Количество отсутствующих предметов изменилось. Повторите добавление.</source>
+        <translation>The missing count changed. Retry the addition.</translation>
+    </message>
+    <message>
+        <source>Предметы добавлены</source>
+        <translation>Items added</translation>
+    </message>
+    <message>
+        <source>Добавлено предметов: %1.</source>
+        <translation>Items added: %1.</translation>
     </message>
 </context>
 </TS>

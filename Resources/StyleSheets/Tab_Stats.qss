@@ -79,13 +79,16 @@ QCheckBox::indicator::checked
 	background: #000 url(:/Resources/Images/Misc/Cross.png) center;
 }
 
-QCheckBox::indicator#cb_all_weapon,
-QCheckBox::indicator#cb_all_armor
+QPushButton#btn_all_weapon,
+QPushButton#btn_all_armor
 {
-	border-color: rgb(80, 80, 80);
+    font: 12px sans-serif;
+    padding: 4px;
+    color: #fff;
+    background: rgb(38, 33, 48);
+    border: 1px solid #fff;
 }
-QCheckBox#cb_all_weapon,
-QCheckBox#cb_all_armor
-{
-	text-decoration: line-through;
-}
+QPushButton#btn_all_weapon:hover,
+QPushButton#btn_all_armor:hover { color: rgb(240, 255, 140); }
+QPushButton#btn_all_weapon:disabled,
+QPushButton#btn_all_armor:disabled { color: #888; border-color: #888; }

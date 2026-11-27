@@ -8,8 +8,7 @@ QLabel
 
 QTabWidget::pane { border: 5px dashed #fff; }
 
-QWidget#Equipment,
-QWidget#Inventory
+QWidget#Equipment
 {
     image: url(:/Resources/Images/Misc/Temp_note.png);
 }

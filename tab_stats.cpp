@@ -3,6 +3,7 @@
 #include "stylefromfile.h"
 
 #include "tab_settings.h"
+#include "tab_inventory.h"
 #include "positiveintvalidator.h"
 
 #include <QMessageBox>
@@ -89,76 +90,6 @@ Tab_Stats::Tab_Stats(QWidget *parent) :
 
     connect(ui->cb_help,       &QCheckBox::toggled, [this](bool) { setCheat("bossFightAssistances", 0, true); });
 
-    const QList<QString> armor =
-        {
-        "SkeletonArmor_Helm",
-        "SkeletonArmor_Torso",
-        "SkeletonArmor_Legs",
-        "SkeletonArmor_Arms",
-        "Armour_Chainmail_Helm",
-        "Armour_Chainmail_Torso",
-        "Armour_Chainmail_Legs",
-        "Armour_Chainmail_Arms",
-        "AntiHero_Helm",
-        "AntiHero_Torso",
-        "AntiHero_Legs",
-        "AntiHero_Arms",
-        "MasterChefArmor_Helm",
-        "MasterChefArmor_Torso",
-        "MasterChefArmor_Legs",
-        "MasterChefArmor_Arms",
-        "CrownOfTheUndone_Helm",
-        "TargetArmor_Torso",
-        "ChildMask_Helm",
-        "GarrettArmor_Helm",
-        "GarrettArmor_Torso",
-        "GarrettArmor_Legs",
-        "GarrettArmor_Arms",
-        "WorryWatchers_Helm",
-        "JacketArmor_Helm",
-        "JacketArmor_Torso",
-        "JacketArmor_Legs",
-        "JacketArmor_Arms",
-        "TerraArmor_Helm",
-        "TerraArmor_Torso",
-        "TerraArmor_Legs",
-        "TerraArmor_Arms",
-        "RedRacer_Legs",
-        "WelcomeArmour_TopHat",
-        "PixelKnight_Helm",
-        "PixelKnight_Torso",
-        "PixelKnight_Legs",
-        "PixelKnight_Arms",
-        "LeisureSuit_Legs",
-        "LeatherArmour_Torso",
-        "LeatherArmour_Legs",
-        "LeatherArmour_Arms",
-        "BikiniArmor_Torso",
-        "BikiniArmor_Legs",
-        "IsaacArmor_Helm",
-        "IsaacArmor_Torso",
-        "IsaacArmor_Legs",
-        "IsaacArmor_Arms",
-        "AloyArmor_Helm",
-        "AloyArmor_Torso",
-        "AloyArmor_Legs",
-        "AloyArmor_Arms",
-        "ForestKid_Helm",
-        "DirkArmor_Helm",
-        "DirkArmor_Torso",
-        "DirkArmor_Legs",
-        "DirkArmor_Arms",
-        "NationalistArmour_Helm",
-        "MercuccioArmor_Helm",
-        "MercuccioArmor_Torso",
-        "MercuccioArmor_Legs",
-        "MercuccioArmor_Arms",
-        "PapersPleaseArmor_Helm",
-        "PapersPleaseArmor_Torso",
-        "PapersPleaseArmor_Legs",
-        "PapersPleaseArmor_Arms"
-        };
-
     connect(ui->cb_all_spell, &QCheckBox::toggled, [this](bool) {
         all_item_cheat(ui->cb_all_spell, Inventory::LegacyGroup::Spells);
     });
@@ -166,9 +97,9 @@ Tab_Stats::Tab_Stats(QWidget *parent) :
         all_item_cheat(ui->cb_all_rune, Inventory::LegacyGroup::Runes);
     });
 
-    // Catalog-driven actions belong to DIG-124.
-    ui->cb_all_weapon->setEnabled(false);
-    ui->cb_all_armor->setEnabled(false);
+    // Explicit command buttons are wired only when the shared catalog tab is present.
+    ui->btn_all_weapon->setEnabled(false);
+    ui->btn_all_armor->setEnabled(false);
 
     ui->btn_cheat->setVisible(false);
     ui->line_3->setVisible(false);
@@ -188,6 +119,15 @@ void Tab_Stats::initSettings(Tab_Settings *s)
     connect(s, &Tab_Settings::saveRestored, this, &Tab_Stats::update);
     connect(s, &Tab_Settings::editingAvailabilityChanged, this, &Tab_Stats::update);
     connect(s, &Tab_Settings::languageChanged, [this](){ui->retranslateUi(this); });
+}
+
+void Tab_Stats::initInventory(Tab_Inventory *inventory)
+{
+    ui->btn_all_armor->setEnabled(true);
+    ui->btn_all_weapon->setEnabled(true);
+    connect(ui->btn_all_armor, &QPushButton::clicked, inventory, &Tab_Inventory::addAllArmor);
+    connect(ui->btn_all_weapon, &QPushButton::clicked, inventory, &Tab_Inventory::addAllWeapons);
+    connect(inventory, &Tab_Inventory::inventoryChanged, this, &Tab_Stats::update);
 }
 
 void Tab_Stats::le_textChanged(QString param, QString text)
@@ -227,7 +167,7 @@ void Tab_Stats::update()
     setEnabled(selected && JsonParser::canEdit());
     // One-shot action controls are not a live model of the save. Reset them
     // after a character change or restore instead of displaying stale checks.
-    for (auto *box : {ui->cb_all_spell, ui->cb_all_rune, ui->cb_all_armor, ui->cb_all_weapon,
+    for (auto *box : {ui->cb_all_spell, ui->cb_all_rune,
                       ui->cb_restore_quests, ui->cb_help}) {
         const QSignalBlocker blocker(box);
         box->setChecked(false);

@@ -20,6 +20,7 @@ add_library(savecore STATIC
     savestore.h savestore.cpp
     jsonparser.h jsonparser.cpp
     inventorymodel.h inventorymodel.cpp
+    inventoryproperties.h inventoryproperties.cpp
     equipmentservice.h equipmentservice.cpp
 )
 target_link_libraries(savecore PUBLIC Qt6::Core tlhon_item_catalog)
@@ -29,6 +30,7 @@ set(EDITOR_SOURCES
     mainwindow.cpp mainwindow.h mainwindow.ui
     stylefromfile.cpp stylefromfile.h
     tab_stats.cpp tab_stats.h tab_stats.ui
+    tab_inventory.cpp tab_inventory.h tab_inventory.ui
     tab_equipment.cpp tab_equipment.h tab_equipment.ui
     tab_settings.cpp tab_settings.h tab_settings.ui
     backupmanager.cpp backupmanager.h

@@ -1,4 +1,6 @@
 #include "inventorymodel.h"
+#include "inventoryproperties.h"
+#include "jsonparser.h"
 #include "savestore.h"
 
 #include <QDir>
@@ -265,6 +267,261 @@ private slots:
         }, error));
         QCOMPARE(readFile(paths.primary()), outside);
         QCOMPARE(readFile(paths.gameBackup()), QByteArray("companion"));
+    }
+
+    void propertyMutationsThroughAppFacade()
+    {
+        QTemporaryDir temp;
+        QVERIFY(temp.isValid());
+        SavePaths paths(temp.path());
+        QString error;
+        SaveDocument original;
+        QVERIFY2(SaveDocument::parse(fixture("SaveData.txt"), original, error), qPrintable(error));
+        auto &slot = original.editCharacter(1);
+        auto generic = slot.character.value("inventory").toArray();
+        qsizetype genericIndex = -1;
+        for (qsizetype i = 0; i < generic.size(); ++i)
+            if (generic.at(i).toObject().value("GUID").toString() == "Consumable_SlowStaminaRestore")
+                genericIndex = i;
+        QVERIFY(genericIndex >= 0);
+        auto record = generic.at(genericIndex).toObject();
+        QCOMPARE(record.value("uses").toInt(), 1);
+        QCOMPARE(record.value("hasSeen").toBool(), false);
+        const auto id = record.value("instanceIDOnCreation").toString();
+        record.insert("futureProperty", QJsonObject{{"nested", QJsonArray{2, "keep"}}});
+        generic.replace(genericIndex, record);
+        auto duplicate = record;
+        duplicate.insert("instanceIDOnCreation", "test-distinct-instance");
+        generic.append(duplicate);
+        slot.character.insert("inventory", generic);
+        auto weapons = slot.character.value("inventoryWeapons").toArray();
+        qsizetype weaponIndex = -1;
+        for (qsizetype i = 0; i < weapons.size(); ++i)
+            if (weapons.at(i).toObject().value("GUID").toString() == "DatumDiggingDagger")
+                weaponIndex = i;
+        QVERIFY(weaponIndex >= 0);
+        const auto weapon = weapons.at(weaponIndex).toObject();
+        const auto weaponId = weapon.value("instanceIDOnCreation").toString();
+        // Disposable test: hold references to both edited instance IDs.
+        slot.character.insert("slottedRightHands", QJsonArray{weaponId, "Base_Punch"});
+        slot.character.insert("equipedConsumables", QJsonArray{id, "NULL", "NULL", "NULL", "NULL"});
+        QVERIFY(put(paths.primary(), original.serialize()));
+        QVERIFY(put(paths.gameBackup(), "game backup"));
+        QVERIFY(put(paths.legacyEditorBackup(), "legacy backup"));
+
+        JsonParser::configure(paths);
+        QVERIFY2(JsonParser::init(error), qPrintable(error));
+        PropertySelection selected;
+        QVERIFY2(selectProperties(JsonParser::characters(), 1, ArrayKind::Generic, id,
+                                  selected, error), qPrintable(error));
+        const auto options = propertyOptions(JsonParser::characters().at(1), selected.item);
+        QVERIFY(options.readOnlyReason.isEmpty());
+        QVERIFY(options.usesReadOnlyReason.isEmpty());
+        QVERIFY(options.hasSeenReadOnlyReason.isEmpty());
+        QVERIFY(!options.flagsReadOnlyReason.isEmpty());
+        QVERIFY(!options.ngPlusReadOnlyReason.isEmpty());
+
+        const auto before = readFile(paths.primary());
+        PropertyEdits edit;
+        for (int badCount : {-2, -1, 0, 3, 100000}) {
+            edit.uses = badCount;
+            QVERIFY(!applyProperties(1, selected, edit, error));
+            QCOMPARE(readFile(paths.primary()), before);
+        }
+        edit.uses = 2; // missing partner seen change
+        QVERIFY(!applyProperties(1, selected, edit, error));
+        QCOMPARE(readFile(paths.primary()), before);
+        edit.hasSeen = true;
+        QVERIFY2(applyProperties(1, selected, edit, error), qPrintable(error));
+        auto expected = original;
+        auto expectedGeneric = generic;
+        auto expectedRecord = record;
+        expectedRecord.insert("uses", 2);
+        expectedRecord.insert("hasSeen", true);
+        expectedGeneric.replace(genericIndex, expectedRecord);
+        expected.editCharacter(1).character.insert("inventory", expectedGeneric);
+        QCOMPARE(readFile(paths.primary()), expected.serialize());
+        // Original record snapshot is stale, even when the ID still exists.
+        QVERIFY(!applyProperties(1, selected, edit, error));
+        QVERIFY(!applyProperties(0, selected, edit, error));
+        QCOMPARE(readFile(paths.primary()), expected.serialize());
+        QVERIFY2(JsonParser::init(error), qPrintable(error));
+        QVERIFY2(selectProperties(JsonParser::characters(), 1, ArrayKind::Generic,
+                                  "test-distinct-instance", selected, error), qPrintable(error));
+        QCOMPARE(selected.item.fields, duplicate);
+        QVERIFY2(applyProperties(1, selected, edit, error), qPrintable(error));
+        duplicate.insert("uses", 2);
+        duplicate.insert("hasSeen", true);
+        expectedGeneric.replace(expectedGeneric.size() - 1, duplicate);
+        expected.editCharacter(1).character.insert("inventory", expectedGeneric);
+        QCOMPARE(readFile(paths.primary()), expected.serialize());
+
+        // The real infusion enum and eligibility cannot be inferred from
+        // fixtures. An INVENTED, test-only review exercises the full typed
+        // weapon path without enabling unsupported game edits.
+        const QList<PropertyRule> testRules {
+            {ArrayKind::Weapon, "DatumDiggingDagger", {},
+             {{5, 0, false}, {4, 1, false}, {0, 0, false}},
+             "Synthetic test-only complete state review; not game evidence"}
+        };
+        QVERIFY2(selectProperties(JsonParser::characters(), 1, ArrayKind::Weapon,
+                                  weaponId, selected, error), qPrintable(error));
+        QVERIFY(!propertyOptions(JsonParser::characters().at(1), selected.item).readOnlyReason.isEmpty());
+        edit = {};
+        edit.level = 4;
+        edit.infusionType = 1;
+        QVERIFY(!applyProperties(1, selected, edit, error)); // default rules fail closed
+        QCOMPARE(readFile(paths.primary()), expected.serialize());
+        QVERIFY2(applyProperties(1, selected, edit, error, testRules), qPrintable(error));
+        auto expectedWeapon = weapon;
+        expectedWeapon.insert("level", 4);
+        expectedWeapon.insert("infusionType", 1);
+        weapons.replace(weaponIndex, expectedWeapon);
+        expected.editCharacter(1).character.insert("inventoryWeapons", weapons);
+        QCOMPARE(readFile(paths.primary()), expected.serialize());
+        QVERIFY2(JsonParser::init(error), qPrintable(error));
+        QVERIFY2(selectProperties(JsonParser::characters(), 1, ArrayKind::Weapon,
+                                  weaponId, selected, error), qPrintable(error));
+        QCOMPARE(selected.item.fields, expectedWeapon);
+        const auto weaponOptions = propertyOptions(JsonParser::characters().at(1), selected.item, testRules);
+        QVERIFY(weaponOptions.levelReadOnlyReason.isEmpty());
+        QVERIFY(weaponOptions.infusionReadOnlyReason.isEmpty());
+        QVERIFY(!weaponOptions.hasSeenReadOnlyReason.isEmpty());
+
+        // Exact no-op must preserve even file timestamps.
+        QFile file(paths.primary());
+        QVERIFY(file.open(QIODevice::ReadWrite));
+        QVERIFY(file.setFileTime(QDateTime::fromSecsSinceEpoch(1577836800, Qt::UTC),
+                                 QFileDevice::FileModificationTime));
+        file.close();
+        const auto mtime = QFileInfo(paths.primary()).lastModified();
+        QVERIFY2(applyProperties(1, selected, edit, error, testRules), qPrintable(error));
+        QCOMPARE(QFileInfo(paths.primary()).lastModified(), mtime);
+        const auto stable = expected.serialize();
+        QList<PropertyEdits> invalid;
+        PropertyEdits bad;
+        bad.level = -1; invalid.append(bad);
+        bad.level = 10000; invalid.append(bad);
+        bad = {}; bad.infusionType = -1; invalid.append(bad);
+        bad.infusionType = 9999; invalid.append(bad);
+        bad.infusionType = 0; invalid.append(bad); // 4/0 was never approved
+        bad = {}; bad.uses = 3; invalid.append(bad); // wrong array
+        for (const auto &invalidEdit : invalid) {
+            QVERIFY(!applyProperties(1, selected, invalidEdit, error, testRules));
+            QVERIFY(!error.isEmpty());
+            QCOMPARE(readFile(paths.primary()), stable);
+            QCOMPARE(QFileInfo(paths.primary()).lastModified(), mtime);
+        }
+        edit.level = 0;
+        edit.infusionType = 0;
+        QVERIFY2(applyProperties(1, selected, edit, error, testRules), qPrintable(error));
+        expectedWeapon.insert("level", 0);
+        expectedWeapon.insert("infusionType", 0);
+        weapons.replace(weaponIndex, expectedWeapon);
+        expected.editCharacter(1).character.insert("inventoryWeapons", weapons);
+        QCOMPARE(readFile(paths.primary()), expected.serialize());
+        QVERIFY2(selectProperties(JsonParser::characters(), 1, ArrayKind::Weapon,
+                                  weaponId, selected, error), qPrintable(error));
+        const auto outside = expected.serialize() + " ";
+        QVERIFY(put(paths.primary(), outside));
+        QVERIFY(!applyProperties(1, selected, edit, error, testRules));
+        QCOMPARE(readFile(paths.primary()), outside);
+        QCOMPARE(readFile(paths.gameBackup()), QByteArray("game backup"));
+        QCOMPARE(readFile(paths.legacyEditorBackup()), QByteArray("legacy backup"));
+        JsonParser::invalidate();
+    }
+
+    void propertyReadOnlyAndInvalidStates()
+    {
+        QString error;
+        SaveDocument doc;
+        QVERIFY2(SaveDocument::parse(fixture("SaveData.txt"), doc, error), qPrintable(error));
+        auto slot = doc.characters().at(1);
+        const auto original = slot;
+        const auto item = objByGuid(slot.character, ArrayKind::Generic, "MessageSign");
+        PropertySelection selected;
+        QVERIFY2(selectProperties(doc.characters(), 1, ArrayKind::Generic,
+                                  item.value("instanceIDOnCreation").toString(), selected, error), qPrintable(error));
+        const auto options = propertyOptions(slot, selected.item);
+        QVERIFY(options.readOnlyReason.isEmpty());
+        QVERIFY(!options.usesReadOnlyReason.isEmpty());
+        QVERIFY(options.hasSeenReadOnlyReason.isEmpty());
+        PropertyEdits edit;
+        edit.uses = 0;
+        QVERIFY(!mutateProperties(slot, 1, selected, edit, error));
+        edit.uses = -2;
+        QVERIFY(!mutateProperties(slot, 1, selected, edit, error));
+        edit = {}; edit.level = 0;
+        QVERIFY(!mutateProperties(slot, 1, selected, edit, error));
+        QCOMPARE(slot.character, original.character);
+        edit = {}; edit.hasSeen = true;
+        QVERIFY2(mutateProperties(slot, 1, selected, edit, error), qPrintable(error));
+        const auto after = objByGuid(slot.character, ArrayKind::Generic, "MessageSign");
+        QCOMPARE(after.value("uses").toInt(), -1);
+        QCOMPARE(after.value("hasSeen").toBool(), true);
+        QVERIFY(!mutateProperties(slot, 1, selected, edit, error)); // stale
+        slot = original;
+        slot.character.insert("guid", "different-character");
+        QVERIFY(!mutateProperties(slot, 1, selected, edit, error));
+        slot = original;
+        slot.character.insert("rememberedGUIDs", QJsonArray{"MessageSign"});
+        QVERIFY(!mutateProperties(slot, 1, selected, edit, error));
+        slot = original;
+        slot.character.insert("hooveredGUIDs", QJsonArray{"MessageSign"});
+        QVERIFY(!mutateProperties(slot, 1, selected, edit, error));
+        slot = original;
+        slot.character.insert("newGamePlusCount", 1);
+        QVERIFY(!mutateProperties(slot, 1, selected, edit, error));
+        slot = original;
+        slot.character.remove("rememberedGUIDs");
+        QVERIFY(!mutateProperties(slot, 1, selected, edit, error));
+        slot = original;
+        const QList<PropertyRule> invalidRules {
+            {ArrayKind::Generic, "MessageSign", {{-1, false}, {5, true}}, {}, "invalid sentinel mixing"}
+        };
+        QVERIFY(!mutateProperties(slot, 1, selected, edit, error, invalidRules));
+        const auto unknown = objByGuid(slot.character, ArrayKind::Generic, "HealthPotion");
+        // HealthPotion is intentionally unreviewed: its upgrade semantics are special.
+        QVERIFY2(selectProperties(doc.characters(), 1, ArrayKind::Generic,
+                                  unknown.value("instanceIDOnCreation").toString(), selected, error), qPrintable(error));
+        QVERIFY(!propertyOptions(slot, selected.item).readOnlyReason.isEmpty());
+        QVERIFY(!mutateProperties(slot, 1, selected, edit, error));
+        QCOMPARE(slot.character, original.character);
+        // Known weapon with only the seen state qualified. It cannot be
+        // upgraded or infused using the built-in rule.
+        const auto known = objByGuid(slot.character, ArrayKind::Weapon, "PlotThreadScissors_Dagger");
+        QVERIFY2(selectProperties(doc.characters(), 1, ArrayKind::Weapon,
+                                  known.value("instanceIDOnCreation").toString(), selected, error), qPrintable(error));
+        const auto knownOptions = propertyOptions(slot, selected.item);
+        QVERIFY(knownOptions.readOnlyReason.isEmpty());
+        QVERIFY(!knownOptions.levelReadOnlyReason.isEmpty());
+        QVERIFY(!knownOptions.infusionReadOnlyReason.isEmpty());
+        QVERIFY(knownOptions.hasSeenReadOnlyReason.isEmpty());
+        edit = {}; edit.infusionType = 2;
+        QVERIFY(!mutateProperties(slot, 1, selected, edit, error));
+        edit = {}; edit.hasSeen = !known.value("hasSeen").toBool();
+        QVERIFY2(mutateProperties(slot, 1, selected, edit, error), qPrintable(error));
+        auto seenExpected = known;
+        seenExpected.insert("hasSeen", *edit.hasSeen);
+        QCOMPARE(objByGuid(slot.character, ArrayKind::Weapon, "PlotThreadScissors_Dagger"), seenExpected);
+        slot = original;
+        auto arbitrary = slot.character.value("inventory").toArray();
+        auto custom = arbitrary.first().toObject();
+        custom.insert("GUID", "Unknown_Future_Item");
+        custom.insert("instanceIDOnCreation", "unknown-id");
+        arbitrary.append(custom);
+        slot.character.insert("inventory", arbitrary);
+        QVERIFY2(selectProperties(QList<SaveCharacter>{slot}, 0, ArrayKind::Generic,
+                                  "unknown-id", selected, error), qPrintable(error));
+        const auto unknownBefore = slot.character;
+        QVERIFY(!mutateProperties(slot, 0, selected, edit, error));
+        QCOMPARE(slot.character, unknownBefore);
+        slot = original;
+        QVERIFY(!selectProperties(doc.characters(), -1, ArrayKind::Generic, "missing", selected, error));
+        QVERIFY(!selectProperties(doc.characters(), 1, ArrayKind::Generic, "missing", selected, error));
+        slot.character.insert("inventory", QJsonArray{});
+        slot.character.insert("inventoryWeapons", QJsonArray{});
+        QVERIFY(!selectProperties(QList<SaveCharacter>{slot}, 0, ArrayKind::Generic, "missing", selected, error));
     }
 
     void failuresAndLegacy()

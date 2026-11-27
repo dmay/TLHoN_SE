@@ -3,6 +3,7 @@
 
 // #include "tab_equipment.h"
 #include "tab_stats.h"
+#include "tab_inventory.h"
 #include "tab_settings.h"
 #include "tab_about.h"
 
@@ -20,12 +21,15 @@ MainWindow::MainWindow(QWidget *parent) :
     setWindowIcon(QIcon(":/Resources/Images/Misc/icon.ico"));
 
     // tab_equipment = new Tab_Equipment(ui->Equipment);
+    tab_inventory = new Tab_Inventory();
     tab_stats = new Tab_Stats();
     tab_settings = new Tab_Settings();
     tab_about = new Tab_About();
 
     // tab_equipment->initSettings(tab_settings);
+    tab_inventory->initSettings(tab_settings);
     tab_stats->initSettings(tab_settings);
+    tab_stats->initInventory(tab_inventory);
     tab_about->initSettings(tab_settings);
 
     ui->btn_equipment->setCheckable(true);
@@ -53,6 +57,7 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(tab_settings, &Tab_Settings::languageChanged, [this]() { emit ui->retranslateUi(this); });
 
     // ui->vl_equipment_layout->addWidget(tab_equipment);
+    ui->vl_inventory_layout->addWidget(tab_inventory);
     ui->vl_stats_layout->addWidget(tab_stats);
     ui->vl_settings_layout->addWidget(tab_settings);
     ui->vl_about_layout->addWidget(tab_about);
@@ -94,6 +99,7 @@ MainWindow::~MainWindow()
 
     // delete tab_equipment;
     delete tab_stats;
+    delete tab_inventory;
     delete tab_settings;
     delete tab_about;
 }

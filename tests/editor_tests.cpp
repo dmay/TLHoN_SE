@@ -5,6 +5,9 @@
 #include "mainwindow.h"
 #include "tab_settings.h"
 #include "tab_stats.h"
+#include "tab_inventory.h"
+#include <QJsonDocument>
+#include <QUuid>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QInputDialog>
@@ -209,6 +212,282 @@ private slots:
         QCOMPARE(memory->text(), QString("77"));
         QVERIFY(memory->isEnabled() && icons->isEnabled());
         QCOMPARE(read(paths.primary()), externalBytes);
+    }
+
+    void catalogGrantUi()
+    {
+        QTemporaryDir dir, prefs;
+        QVERIFY(dir.isValid() && prefs.isValid());
+        QSettings::setDefaultFormat(QSettings::IniFormat);
+        QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, prefs.path());
+        QSettings("DeathWhisper", "TLHoN_SE").setValue("Cheat mode", "1");
+        JsonParser::configure(SavePaths(dir.path()));
+        const auto paths = JsonParser::paths();
+        const auto put = [](const QString &path, const QByteArray &bytes) {
+            QFile f(path);
+            return f.open(QIODevice::WriteOnly) && f.write(bytes) == bytes.size() && f.flush();
+        };
+        const auto read = [](const QString &path) {
+            QFile f(path);
+            return f.open(QIODevice::ReadOnly) ? f.readAll() : QByteArray();
+        };
+        QString error;
+        SaveDocument original;
+        QVERIFY2(SaveDocument::parse(read(QDir(FIXTURE_DIR).filePath("SaveData.txt")), original, error), qPrintable(error));
+        auto &second = original.editCharacter(1);
+        auto generic = second.character.value("inventory").toArray();
+        const QString ownedGuid = "MasterChefArmor_Helm";
+        QJsonObject duplicate;
+        int alreadyOwned = 0;
+        for (const auto &value : generic) {
+            if (value.toObject().value("GUID").toString() == ownedGuid) {
+                duplicate = value.toObject();
+                ++alreadyOwned;
+            }
+        }
+        QVERIFY(!duplicate.isEmpty());
+        duplicate["instanceIDOnCreation"] = QUuid::createUuid().toString(QUuid::WithoutBraces);
+        generic.append(duplicate);
+        ++alreadyOwned;
+        second.character["inventory"] = generic;
+        const auto baseline = original.serialize();
+        QVERIFY(put(paths.primary(), baseline));
+        QVERIFY(put(paths.gameBackup(), "game companion"));
+        QVERIFY(put(paths.legacyEditorBackup(), "legacy editor backup"));
+        QVERIFY2(JsonParser::init(error), qPrintable(error));
+
+        // Entirely synthetic paths/allow-list, not a qualification of real items.
+        const QString catalogPath = dir.filePath("catalog.json"), reviewPath = dir.filePath("review.json");
+        const QJsonArray ids{
+            "Assets/Design/GameplayData/Items/Armour/MasterChefArmor_Helm.asset",
+            "Assets/Design/GameplayData/Items/Armour/TestArmor.asset",
+            "Assets/Design/GameplayData/Items/Armour/testArmor.asset",
+            "Assets/Design/GameplayData/Items/Armour/DLCArmours/TestDlcArmor.asset",
+            "Assets/Design/GameplayData/Items/Weapons/Swords/TestSword.asset",
+            "Assets/Design/GameplayData/Items/Weapons/Swords/ExtraSword.asset",
+            "Assets/Design/GameplayData/Items/Shields/TestShield.asset",
+            "Assets/Design/GameplayData/Items/Weapons/Swords/UnreviewedSword.asset",
+            "Assets/Design/GameplayData/Items/Weapons/BaseTypes/BaseSword.asset"
+        };
+        const QByteArray catalogBytes = QJsonDocument(QJsonObject{{"m_InternalIds", ids}}).toJson();
+        QVERIFY(put(catalogPath, catalogBytes));
+        ItemCatalog::Source source{catalogPath, "synthetic"};
+        ItemCatalog::Catalog catalog;
+        QVERIFY2(ItemCatalog::load(source, catalog, error), qPrintable(error));
+        QJsonArray reviewed;
+        for (const auto &guid : {"MasterChefArmor_Helm", "TestArmor", "testArmor", "TestDlcArmor", "TestSword", "ExtraSword", "TestShield"}) {
+            const auto *entry = catalog.find(guid);
+            QVERIFY(entry);
+            QJsonObject row{{"guid", entry->guid}, {"sourcePath", entry->sourcePaths.first()},
+                {"status", "allow"}, {"category", ItemCatalog::categoryName(entry->category)},
+                {"dlc", entry->dlc == ItemCatalog::Dlc::DlcPath ? "dlc" : "base"}, {"evidence", "Synthetic test review"}};
+            if (entry->category == ItemCatalog::Category::Armor) row["slot"] = "helm";
+            if (entry->guid == "TestArmor") row["displayName"] = "Sample Helmet";
+            reviewed.append(row);
+        }
+        const auto reviewBytes = QJsonDocument(QJsonObject{{"schemaVersion", 1}, {"catalogSha256", catalog.sha256}, {"entries", reviewed}}).toJson();
+        QVERIFY(put(reviewPath, reviewBytes));
+
+        MainWindow window;
+        window.show();
+        auto *inventory = window.findChild<Tab_Inventory *>();
+        auto *settings = window.findChild<Tab_Settings *>();
+        auto *stats = window.findChild<Tab_Stats *>();
+        QVERIFY(inventory && settings && stats);
+        auto *character = settings->findChild<QComboBox *>("cb_saves");
+        auto *table = inventory->findChild<QTableWidget *>("catalogTable");
+        auto *search = inventory->findChild<QLineEdit *>("catalogSearch");
+        auto *filter = inventory->findChild<QComboBox *>("categoryFilter");
+        auto *onlyMissing = inventory->findChild<QCheckBox *>("missingOnly");
+        auto *entitled = inventory->findChild<QCheckBox *>("dlcEntitled");
+        auto *qualified = inventory->findChild<QCheckBox *>("bulkQualified");
+        auto *preview = inventory->findChild<QPlainTextEdit *>("itemPreview");
+        auto *add = inventory->findChild<QPushButton *>("addSelected");
+        auto *allArmor = stats->findChild<QPushButton *>("btn_all_armor");
+        auto *allWeapons = stats->findChild<QPushButton *>("btn_all_weapon");
+        auto *cheats = stats->findChild<QPushButton *>("btn_cheat");
+        auto *openInventory = window.findChild<QPushButton *>("btn_inventory");
+        auto *openStats = window.findChild<QPushButton *>("btn_stats");
+        QVERIFY(character && table && search && filter && onlyMissing && entitled && qualified && preview && add && allArmor && allWeapons && cheats && openInventory && openStats);
+        character->setCurrentIndex(1);
+        openInventory->click();
+        QVERIFY(inventory->isVisible());
+        QVERIFY(!add->isEnabled());
+        QCOMPARE(table->rowCount(), 0);
+        QVERIFY(!inventory->loadCatalog({dir.filePath("missing.json"), {}}));
+        QCOMPARE(table->rowCount(), 0);
+        QVERIFY(inventory->loadCatalog(source));
+        QVERIFY(table->rowCount() > 0);
+        QVERIFY(!qualified->isEnabled());
+        const auto select = [&](const QString &guid) {
+            for (int row = 0; row < table->rowCount(); ++row) {
+                if (table->item(row, 0)->data(Qt::UserRole).toString() == guid) {
+                    table->selectRow(row);
+                    return row;
+                }
+            }
+            return -1;
+        };
+        QVERIFY(select("TestArmor") >= 0);
+        QVERIFY(!add->isEnabled());
+        QVERIFY(inventory->loadCatalog(source, reviewPath));
+        QVERIFY(!qualified->isChecked() && !entitled->isChecked());
+        search->setText("Sample Helmet");
+        QCOMPARE(table->rowCount(), 1);
+        QVERIFY(select("TestArmor") >= 0);
+        QVERIFY(add->isEnabled());
+        QVERIFY(preview->toPlainText().contains("inventory"));
+        search->setText("testarmor");
+        QCOMPARE(table->rowCount(), 2); // case-insensitive search; exact identity below
+        search->clear();
+        filter->setCurrentIndex(filter->findData(int(ItemCatalog::Category::Weapon)));
+        QCOMPARE(table->rowCount(), 4);
+        QVERIFY(select("UnreviewedSword") >= 0);
+        QVERIFY(!add->isEnabled());
+        QVERIFY(select("BaseSword") >= 0);
+        QVERIFY(!add->isEnabled());
+        filter->setCurrentIndex(0);
+        int ownedRow = select(ownedGuid);
+        QVERIFY(ownedRow >= 0);
+        QCOMPARE(table->item(ownedRow, 4)->text(), QString::number(alreadyOwned));
+        QVERIFY(!add->isEnabled());
+        onlyMissing->setChecked(true);
+        QCOMPARE(select(ownedGuid), -1);
+        onlyMissing->setChecked(false);
+        QVERIFY(select("TestDlcArmor") >= 0);
+        QVERIFY(!add->isEnabled());
+        entitled->setChecked(true);
+        QVERIFY(add->isEnabled());
+        entitled->setChecked(false);
+        QVERIFY(!add->isEnabled());
+        QCOMPARE(read(paths.primary()), baseline);
+
+        // Respond to confirmation and any subsequent result modal. Queue
+        // button clicks outside the polling callback (nested modal loops).
+        struct Dialogs { QStringList questions, infos, warnings; };
+        auto press = [&](QPushButton *button, bool accept, const std::function<void()> &during = {}) {
+            Dialogs result;
+            QTimer timer;
+            connect(&timer, &QTimer::timeout, &window, [&] {
+                auto *box = qobject_cast<QMessageBox *>(QApplication::activeModalWidget());
+                if (!box || box->property("testHandled").toBool()) return;
+                box->setProperty("testHandled", true);
+                auto answer = QMessageBox::Ok;
+                if (box->icon() == QMessageBox::Question) {
+                    result.questions.append(box->text());
+                    answer = accept ? QMessageBox::Yes : QMessageBox::No;
+                    if (during) during();
+                } else if (box->icon() == QMessageBox::Warning) result.warnings.append(box->text());
+                else result.infos.append(box->text());
+                if (auto *b = box->button(answer)) QTimer::singleShot(0, b, [b] { b->click(); });
+            });
+            timer.start(5);
+            button->click();
+            timer.stop();
+            return result;
+        };
+        openStats->click();
+        cheats->setChecked(true);
+        QVERIFY(allArmor->isVisible() && allWeapons->isVisible());
+        // Qualification is an explicit gate; not inferred from a reviewed path.
+        auto gated = press(allArmor, true);
+        QCOMPARE(gated.warnings.size(), 1);
+        QVERIFY(gated.questions.isEmpty());
+        QCOMPARE(read(paths.primary()), baseline);
+        openInventory->click();
+        qualified->setChecked(true); // synthetic fixture qualification only
+        QVERIFY(select("TestArmor") >= 0);
+        const auto canceled = press(add, false);
+        QCOMPARE(canceled.questions.size(), 1);
+        QVERIFY(canceled.questions.first().contains("Add: 1"));
+        QCOMPARE(read(paths.primary()), baseline);
+        const auto armor = press(add, true);
+        QCOMPARE(armor.infos.size(), 1);
+        QVERIFY(armor.infos.first().contains("Items added: 1"));
+        QVERIFY(!add->isEnabled());
+        QVERIFY(select("TestSword") >= 0);
+        QVERIFY(preview->toPlainText().contains("inventoryWeapons"));
+        const auto sword = press(add, true);
+        QCOMPARE(sword.infos.size(), 1);
+        QVERIFY(sword.infos.first().contains("Items added: 1"));
+
+        openStats->click();
+        const auto bulkArmor = press(allArmor, true);
+        QCOMPARE(bulkArmor.questions.size(), 1);
+        QVERIFY(bulkArmor.questions.first().contains("Add: 1; owned: 2; ineligible: 1"));
+        QVERIFY(bulkArmor.infos.first().contains("Items added: 1"));
+        const auto bulkWeapons = press(allWeapons, true);
+        QCOMPARE(bulkWeapons.questions.size(), 1);
+        QVERIFY(bulkWeapons.questions.first().contains("Add: 2; owned: 1; ineligible: 2"));
+        QVERIFY(bulkWeapons.infos.first().contains("Items added: 2"));
+        const auto after = read(paths.primary());
+        const auto time = QFileInfo(paths.primary()).lastModified();
+        const auto repeatedArmor = press(allArmor, true);
+        QCOMPARE(repeatedArmor.infos.size(), 1);
+        QVERIFY(repeatedArmor.infos.first().contains("New items: 0"));
+        QCOMPARE(press(allWeapons, true).questions.size(), 0);
+        QCOMPARE(read(paths.primary()), after);
+        QCOMPARE(QFileInfo(paths.primary()).lastModified(), time);
+
+        SaveDocument disk;
+        QVERIFY2(SaveDocument::parse(after, disk, error), qPrintable(error));
+        QCOMPARE(disk.characters()[0].character, original.characters()[0].character);
+        const auto &updated = disk.characters()[1];
+        QCOMPARE(updated.character.value("inventory").toArray().size(), generic.size() + 2);
+        QCOMPARE(updated.character.value("inventoryWeapons").toArray().size(), second.character.value("inventoryWeapons").toArray().size() + 3);
+        QList<Inventory::Instance> instances;
+        QVERIFY2(Inventory::read(updated, instances, error), qPrintable(error));
+        for (const auto &item : instances) QVERIFY(item.guid != "TestDlcArmor" && item.guid != "UnreviewedSword" && item.guid != "BaseSword");
+        SaveDocument expected;
+        QVERIFY(SaveDocument::parse(baseline, expected, error));
+        expected.editCharacter(1).character["inventory"] = updated.character.value("inventory");
+        expected.editCharacter(1).character["inventoryWeapons"] = updated.character.value("inventoryWeapons");
+        QCOMPARE(after, expected.serialize()); // all unrelated bytes, including other sections
+        for (qsizetype i = 0; i < generic.size(); ++i) QCOMPARE(updated.character.value("inventory").toArray()[i], generic[i]);
+        QCOMPARE(read(paths.gameBackup()), QByteArray("game companion"));
+        QCOMPARE(read(paths.legacyEditorBackup()), QByteArray("legacy editor backup"));
+
+        // Switching characters changes the target, not the catalog selection.
+        character->setCurrentIndex(0);
+        openInventory->click();
+        QVERIFY(select("TestSword") >= 0 && add->isEnabled());
+        const auto switchedDuringConfirm = press(add, true, [&] { character->setCurrentIndex(1); });
+        QCOMPARE(switchedDuringConfirm.warnings.size(), 1);
+        QCOMPARE(read(paths.primary()), after);
+        character->setCurrentIndex(0);
+        QVERIFY(select("TestSword") >= 0 && add->isEnabled());
+        QCOMPARE(press(add, true).infos.size(), 1);
+        SaveDocument afterSwitch;
+        QVERIFY(SaveDocument::parse(read(paths.primary()), afterSwitch, error));
+        QCOMPARE(afterSwitch.characters()[1].character, updated.character);
+        QCOMPARE(afterSwitch.characters()[0].character.value("inventoryWeapons").toArray().size(), original.characters()[0].character.value("inventoryWeapons").toArray().size()+1);
+        const auto afterSwitchBytes = read(paths.primary());
+        settings->reloadSave();
+        QVERIFY(select("TestSword") >= 0 && !add->isEnabled());
+        QCOMPARE(read(paths.primary()), afterSwitchBytes);
+
+        // External writer during confirmation must fail closed.
+        QVERIFY(select("TestArmor") >= 0 && add->isEnabled());
+        afterSwitch.editCharacter(0).character["memory"] = 1234;
+        const auto external = afterSwitch.serialize();
+        bool wrote = false;
+        const auto stale = press(add, true, [&] { wrote = put(paths.primary(), external); });
+        QVERIFY(wrote);
+        QCOMPARE(stale.warnings.size(), 1);
+        QCOMPARE(read(paths.primary()), external);
+        settings->reloadSave();
+        QVERIFY(select("TestArmor") >= 0 && add->isEnabled());
+        const auto newCatalog = press(add, true, [&] { wrote = put(catalogPath, catalogBytes + "\n"); });
+        QVERIFY(wrote);
+        QCOMPARE(newCatalog.warnings.size(), 1);
+        QCOMPARE(table->rowCount(), 0);
+        QVERIFY(!add->isEnabled() && !qualified->isChecked());
+        QCOMPARE(read(paths.primary()), external);
+        // Missing/corrupt save disables grants; no write on reload or open.
+        QVERIFY(QFile::remove(paths.primary()));
+        settings->reloadSave();
+        QVERIFY(!add->isEnabled() && !allArmor->isEnabled());
+        QVERIFY(!QFile::exists(paths.primary()));
     }
 
     void stubbedCatalog()

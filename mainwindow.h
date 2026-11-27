@@ -27,6 +27,7 @@ private:
     class QLabel *checked_label;
 
     // class Tab_Equipment *tab_equipment;
+    class Tab_Inventory *tab_inventory;
     class Tab_Stats *tab_stats;
     class Tab_Settings *tab_settings;
     class Tab_About *tab_about;

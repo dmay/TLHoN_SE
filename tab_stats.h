@@ -19,6 +19,7 @@ class Tab_Stats : public QWidget
 public:
     explicit Tab_Stats(QWidget *parent = nullptr);
     void initSettings(class Tab_Settings* s);
+    void initInventory(class Tab_Inventory *inventory);
     ~Tab_Stats();
 
 private slots:

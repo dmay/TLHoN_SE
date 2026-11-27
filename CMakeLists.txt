@@ -20,6 +20,7 @@ add_library(savecore STATIC
     savestore.h savestore.cpp
     jsonparser.h jsonparser.cpp
     inventorymodel.h inventorymodel.cpp
+    inventoryproperties.h inventoryproperties.cpp
 )
 target_link_libraries(savecore PUBLIC Qt6::Core tlhon_item_catalog)
 target_include_directories(savecore PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})

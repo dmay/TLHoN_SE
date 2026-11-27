@@ -858,32 +858,15 @@
         </widget>
        </item>
        <item>
-        <widget class="QCheckBox" name="cb_all_armor">
-         <property name="toolTip">
-          <string>Добавляет всю броню</string>
-         </property>
-         <property name="layoutDirection">
-          <enum>Qt::LayoutDirection::RightToLeft</enum>
-         </property>
-         <property name="text">
-          <string notr="true">All armor</string>
-         </property>
+        <widget class="QPushButton" name="btn_all_armor">
+         <property name="toolTip"><string>Использует проверенный каталог на вкладке «Сумка»</string></property>
+         <property name="text"><string>Добавить недостающую броню</string></property>
         </widget>
        </item>
        <item>
-        <widget class="QCheckBox" name="cb_all_weapon">
-         <property name="enabled">
-          <bool>true</bool>
-         </property>
-         <property name="toolTip">
-          <string>Добавляет все оружие</string>
-         </property>
-         <property name="layoutDirection">
-          <enum>Qt::LayoutDirection::RightToLeft</enum>
-         </property>
-         <property name="text">
-          <string notr="true">All weapon</string>
-         </property>
+        <widget class="QPushButton" name="btn_all_weapon">
+         <property name="toolTip"><string>Использует проверенный каталог на вкладке «Сумка»</string></property>
+         <property name="text"><string>Добавить оружие и щиты</string></property>
         </widget>
        </item>
        <item>

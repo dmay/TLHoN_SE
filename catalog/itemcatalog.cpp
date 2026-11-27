@@ -251,8 +251,8 @@ bool applyReview(const QJsonObject &review, Catalog &catalog, QString &error)
             it->evidence = evidence;
             continue;
         }
-        if (status != "allow" || it->availability == Availability::Excluded ||
-            it->category == Category::Other ||
+        if ((status != "allow" && status != "equip") || it->availability == Availability::Excluded ||
+            (status == "allow" && it->category == Category::Other) ||
             row.value("category").toString() != categoryName(it->category)) {
             return invalid();
         }
@@ -274,7 +274,28 @@ bool applyReview(const QJsonObject &review, Catalog &catalog, QString &error)
         }
         if ((row.contains("displayName") && !row.value("displayName").isString()) ||
             (row.contains("type") && !row.value("type").isString())) return invalid();
+        // Equipment-only review does not establish obtainability. Hand,
+        // ring and quick-slot compatibility must be explicitly verified;
+        // category/path or naming alone is insufficient.
+        QStringList equipmentSlots;
+        if (it->category == Category::Armor) {
+            if (row.contains("equipmentSlots")) return invalid();
+            equipmentSlots.append(slot);
+        } else if (row.contains("equipmentSlots")) {
+            const auto slotValues = row.value("equipmentSlots");
+            if (!slotValues.isArray() || slotValues.toArray().isEmpty()) return invalid();
+            const QStringList allowed = it->category == Category::Other
+                ? QStringList{"ring", "consumable"} : QStringList{"leftHand", "rightHand"};
+            for (const auto &value : slotValues.toArray()) {
+                const auto name = value.toString();
+                if (!allowed.contains(name) || equipmentSlots.contains(name)) return invalid();
+                equipmentSlots.append(name);
+            }
+            if (it->category == Category::Other && equipmentSlots.size() != 1) return invalid();
+        }
+        if (status == "equip" && equipmentSlots.isEmpty()) return invalid();
         it->slot = slot;
+        it->equipmentSlots = equipmentSlots;
         if (!row.value("displayName").toString().trimmed().isEmpty()) {
             it->displayName = row.value("displayName").toString();
             it->displayNameVerified = true;
@@ -283,8 +304,8 @@ bool applyReview(const QJsonObject &review, Catalog &catalog, QString &error)
             it->type = row.value("type").toString();
             it->typeVerified = true;
         }
-        it->availability = Availability::Validated;
-        it->reason = "reviewed-allowlist";
+        it->availability = status == "allow" ? Availability::Validated : Availability::Unresolved;
+        it->reason = status == "allow" ? "reviewed-allowlist" : "reviewed-equipment-only";
         it->evidence = evidence;
     }
     return true;
@@ -362,6 +383,7 @@ QJsonObject Catalog::report() const
         rows.append(QJsonObject{
             {"guid", entry.guid}, {"sourcePaths", QJsonArray::fromStringList(entry.sourcePaths)},
             {"category", category}, {"type", entry.type}, {"typeVerified", entry.typeVerified}, {"slot", entry.slot},
+            {"equipmentSlots", QJsonArray::fromStringList(entry.equipmentSlots)},
             {"displayName", entry.displayName}, {"displayNameVerified", entry.displayNameVerified},
             {"dlc", dlcName(entry.dlc)},
             {"availability", status}, {"reason", entry.reason}, {"evidence", entry.evidence},

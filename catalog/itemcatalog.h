@@ -22,6 +22,7 @@ struct Entry {
     QString type; // Path-derived hint unless typeVerified.
     bool typeVerified = false;
     QString slot; // Empty until verified (helm, torso, arms, legs).
+    QStringList equipmentSlots; // Explicit reviewed eligibility; no path-based guesses.
     QString displayName; // Exact GUID fallback, not a guessed localized name.
     bool displayNameVerified = false;
     Dlc dlc = Dlc::Unknown;

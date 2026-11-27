@@ -3,6 +3,7 @@
 #include "jsonparser.h"
 
 #include <QDir>
+#include <QCryptographicHash>
 #include <QFile>
 #include <QFileInfo>
 #include <QLockFile>
@@ -59,6 +60,95 @@ class RestoreServiceTests : public QObject
 {
     Q_OBJECT
 private slots:
+    void fixtureEditRestoreQualification()
+    {
+        Sandbox s;
+        QVERIFY(s.setup());
+        const auto primary = fixture("SaveData.txt");
+        const auto companion = fixture("SaveData1.txt");
+        QVERIFY(!primary.isEmpty() && !companion.isEmpty());
+        QVERIFY(s.pair(primary, companion));
+        const auto hash = [](const QByteArray &bytes) {
+            return QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex();
+        };
+        const auto record = [&](const QString &stage) {
+            qInfo().noquote() << "QUALIFICATION" << stage
+                << "primary=" + QString::fromLatin1(hash(read(s.paths.primary())))
+                << "companion=" + QString::fromLatin1(hash(read(s.paths.gameBackup())));
+        };
+        record("before");
+        QString error;
+        BackupSnapshot baseline, edited, safety, undo;
+        QVERIFY2(s.backups.createSnapshot("Qualification baseline", baseline, error), qPrintable(error));
+        QCOMPARE(baseline.files[0].sha256, hash(primary));
+        QCOMPARE(baseline.files[1].sha256, hash(companion));
+        QCOMPARE(read(s.member(baseline, "SaveData.txt")), primary);
+        QCOMPARE(read(s.member(baseline, "SaveData.txt.bak")), companion);
+        record("after capture");
+
+        SaveStore store(s.paths);
+        QVERIFY2(store.load(error), qPrintable(error));
+        const auto original = store.document();
+        QCOMPARE(original.characters().size(), 2);
+        const int memory = original.characters()[1].character["memory"].toInt();
+        QVERIFY2(store.mutateCharacter(1, [memory](SaveCharacter &slot) {
+            slot.character["memory"] = memory == 12345 ? 12346 : 12345;
+        }, error), qPrintable(error));
+        const auto changed = read(s.paths.primary());
+        QVERIFY(changed != primary);
+        QCOMPARE(read(s.paths.gameBackup()), companion);
+        auto expected = original;
+        expected.editCharacter(1).character["memory"] = memory == 12345 ? 12346 : 12345;
+        QCOMPARE(changed, expected.serialize());
+        QCOMPARE(store.document().characters()[0].character, original.characters()[0].character);
+        QCOMPARE(store.document().characters()[0].info, original.characters()[0].info);
+        QCOMPARE(store.document().characters()[0].quests, original.characters()[0].quests);
+        QCOMPARE(store.document().characters()[1].info, original.characters()[1].info);
+        QCOMPARE(store.document().characters()[1].quests, original.characters()[1].quests);
+        QCOMPARE(store.document().settings(), original.settings());
+        record("after edit");
+        QVERIFY2(s.backups.createSnapshot("Qualification edited", edited, error), qPrintable(error));
+        QCOMPARE(edited.files[0].sha256, hash(changed));
+
+        RestorePreview preview;
+        QVERIFY2(s.restores.preview(baseline.id, preview, error), qPrintable(error));
+        QVERIFY2(s.restores.restore(preview, safety, error), qPrintable(error));
+        QCOMPARE(read(s.paths.primary()), primary);
+        QCOMPARE(read(s.paths.gameBackup()), companion);
+        QCOMPARE(safety.files[0].sha256, hash(changed));
+        QCOMPARE(safety.files[1].sha256, hash(companion));
+        QCOMPARE(read(s.member(safety, "SaveData.txt")), changed);
+        QCOMPARE(read(s.member(safety, "SaveData.txt.bak")), companion);
+        record("after restore");
+        qInfo().noquote() << "QUALIFICATION safety snapshot"
+            << "primary=" + QString::fromLatin1(safety.files[0].sha256)
+            << "companion=" + QString::fromLatin1(safety.files[1].sha256);
+        // The pre-restore in-memory editor is stale and must not write.
+        QVERIFY(!store.canEdit());
+        QVERIFY(!store.mutateCharacter(1, [](SaveCharacter &slot) {
+            slot.character["memory"] = 1;
+        }, error));
+        QCOMPARE(read(s.paths.primary()), primary);
+        QCOMPARE(read(s.paths.gameBackup()), companion);
+        QVERIFY2(store.load(error), qPrintable(error));
+        QCOMPARE(store.document().serialize(), primary);
+        QCOMPARE(store.document().characters()[1].character["memory"].toInt(), memory);
+
+        QVERIFY2(s.restores.preview(safety.id, preview, error), qPrintable(error));
+        QVERIFY2(s.restores.restore(preview, undo, error), qPrintable(error));
+        QCOMPARE(read(s.paths.primary()), changed);
+        QCOMPARE(read(s.paths.gameBackup()), companion);
+        record("after undo");
+        QVERIFY2(s.restores.preview(baseline.id, preview, error), qPrintable(error));
+        QVERIFY2(s.restores.restore(preview, undo, error), qPrintable(error));
+        QCOMPARE(read(s.paths.primary()), primary);
+        QCOMPARE(read(s.paths.gameBackup()), companion);
+        QCOMPARE(read(s.member(baseline, "SaveData.txt")), primary);
+        QCOMPARE(read(s.member(edited, "SaveData.txt")), changed);
+        QVERIFY(!RestoreService::hasPending(s.paths));
+        record("final");
+    }
+
     void fullRestoreAndSafety()
     {
         Sandbox s;

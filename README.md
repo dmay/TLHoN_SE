@@ -7,7 +7,7 @@
 
 ## Opportunities
 ### What is ready
-Not all features are completed at the moment, but most of them are. <br>
+Not all features are completed at the moment. Backup/restore and protected editing are covered by automated fixture tests; actual installed-game and Steam Cloud qualification is tracked separately in [the qualification report](docs/backup-qualification.md). <br>
 You will be able to:
 * Increase/decrease your hero's memory count to "impossible" values
 * Increase/decrease the hero's icons count
@@ -19,6 +19,8 @@ You will be able to:
 * Remember or unburden all items <b>*</b>
 
 <b>*</b> Actually, your items will not change, but an achievement will be completed.
+
+* Create, label, inspect, and restore verified save snapshots (editor/fixture coverage; in-game verification pending)
 
 ### What is in progress
 * Adding all armor and weapons (for this, I need to find them or get a save file)
@@ -93,8 +95,27 @@ program that ignores the lock from writing in the final check/replace window.
 Ordinary edits leave the game backup (`SaveData.txt.bak`) and any existing
 legacy editor backup (`SaveData.txt_bckp`) untouched. In **Settings → Backup
 Manager**, create and name complete save snapshots, inspect the catalog, and
-restore selected snapshots with an automatic pre-restore safety copy. See
-[Backup Manager](docs/backup-manager.md) and [restore and recovery](docs/restore-recovery.md).
+restore selected snapshots with an automatic pre-restore safety copy.
+
+- Backups are stored by default in `%LOCALAPPDATA%\TLHoN_SE\Backups`, outside
+  the game save directory. Choose another separate folder in Backup Manager
+  as needed; changing folders does not move older snapshots.
+- Select a verified, parseable backup and review the confirmation before
+  restoring. Full snapshots restore **all characters** and the exact companion
+  file state, not just the selected character. Legacy `_bckp` imports restore
+  only the primary file.
+- If the active save is missing or corrupt, open Backup Manager from Settings
+  and restore a known-good snapshot. The automatic safety backup preserves
+  whatever active bytes still exist. If a previous restore was interrupted,
+  use Reload save after resolving the reported problem; preserve the journal
+  and safety copies rather than deleting them to bypass recovery.
+- Close the game and wait for Steam Cloud sync before creating backups,
+  editing or restoring. Steam may replace restored bytes. Decide explicitly
+  which version to retain if a conflict appears; never assume the newest
+  timestamp is the desired version. Keep independent backups.
+
+See [Backup Manager](docs/backup-manager.md), [restore and recovery](docs/restore-recovery.md),
+and [DIG-121 qualification and local game test](docs/backup-qualification.md).
 
 ### Save access API
 

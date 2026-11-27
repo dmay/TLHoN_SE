@@ -17,6 +17,8 @@
 #include <QLabel>
 #include <QProcess>
 #include <QFile>
+#include <QFileInfo>
+#include <QJsonArray>
 #include <QDir>
 #include <QLineEdit>
 #include <QPushButton>
@@ -78,6 +80,135 @@ private slots:
         QCOMPARE(reloaded.document().characters()[0].character["backstabCount"],
                  JsonParser::characters()[0].character["backstabCount"]);
         QVERIFY(!QFile::exists(JsonParser::paths().legacyEditorBackup()));
+    }
+
+    void statsAndNoOpRefresh()
+    {
+        QTemporaryDir saves;
+        QTemporaryDir prefs;
+        QVERIFY(saves.isValid() && prefs.isValid());
+        QSettings::setDefaultFormat(QSettings::IniFormat);
+        QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, prefs.path());
+        JsonParser::configure(SavePaths(saves.path()));
+        const auto paths = JsonParser::paths();
+        const QByteArray baseline = R"({}~SettingsSplit~{"name":"First","memory":11};{};{};opaque;~NoticeMeSenpaiNoticeMe~{"name":"Second","memory":22,"maxIconUses":4,"inventory":[{"GUID":"unrelated"}]};{"bossFightAssistances":3};{"questStage_Main":7};opaque;)";
+        const auto put = [](const QString &path, const QByteArray &bytes) {
+            QFile file(path);
+            return file.open(QIODevice::WriteOnly) && file.write(bytes) == bytes.size() && file.flush();
+        };
+        const auto read = [](const QString &path) {
+            QFile file(path);
+            return file.open(QIODevice::ReadOnly) ? file.readAll() : QByteArray();
+        };
+        QVERIFY(put(paths.primary(), baseline));
+        QVERIFY(put(paths.gameBackup(), "companion"));
+        QVERIFY(put(paths.legacyEditorBackup(), "legacy"));
+        QString error;
+        QVERIFY2(JsonParser::init(error), qPrintable(error));
+        MainWindow window;
+        auto *tab = window.findChild<Tab_Settings *>();
+        auto *stats = window.findChild<Tab_Stats *>();
+        QVERIFY(tab && stats);
+        auto *selector = tab->findChild<QComboBox *>("cb_saves");
+        auto *memory = stats->findChild<QLineEdit *>("le_memory");
+        auto *icons = tab->findChild<QLineEdit *>("le_maxIconUses");
+        QVERIFY(selector && memory && icons);
+        QCOMPARE(selector->count(), 2);
+        selector->setCurrentIndex(1);
+        QCOMPARE(memory->text(), QString("22"));
+
+        // A byte-equal rewrite would not be caught by a hash alone. Set a
+        // sentinel mtime, then confirm that even the timestamp is unchanged.
+        const auto sentinel = QDateTime::fromSecsSinceEpoch(1577836800, Qt::UTC);
+        for (const auto &path : {paths.primary(), paths.gameBackup(), paths.legacyEditorBackup()}) {
+            QFile file(path);
+            QVERIFY(file.open(QIODevice::ReadWrite));
+            QVERIFY(file.setFileTime(sentinel, QFileDevice::FileModificationTime));
+        }
+        const auto primaryTime = QFileInfo(paths.primary()).lastModified();
+        const auto companionTime = QFileInfo(paths.gameBackup()).lastModified();
+        const auto legacyTime = QFileInfo(paths.legacyEditorBackup()).lastModified();
+        selector->setCurrentIndex(0);
+        QCOMPARE(memory->text(), QString("11"));
+        selector->setCurrentIndex(1);
+        tab->reloadSave();
+        QCOMPARE(selector->currentIndex(), 1);
+        QCOMPARE(memory->text(), QString("22"));
+        QVERIFY(QMetaObject::invokeMethod(memory, "editingFinished"));
+        QVERIFY(QMetaObject::invokeMethod(icons, "editingFinished"));
+        QCOMPARE(read(paths.primary()), baseline);
+        QCOMPARE(QFileInfo(paths.primary()).lastModified(), primaryTime);
+        QCOMPARE(QFileInfo(paths.gameBackup()).lastModified(), companionTime);
+        QCOMPARE(QFileInfo(paths.legacyEditorBackup()).lastModified(), legacyTime);
+
+        const QMap<QString, QString> fields = {
+            {"le_memory", "memory"}, {"le_stat_vitality", "_stat_vitality"},
+            {"le_stat_stamina", "_stat_stamina"}, {"le_stat_equipLoad", "_stat_equipLoad"},
+            {"le_stat_strength", "_stat_strength"}, {"le_stat_dexterity", "_stat_dexterity"},
+            {"le_stat_attunement", "_stat_attunement"}, {"le_stat_luck", "_stat_luck"}
+        };
+        for (auto it = fields.cbegin(); it != fields.cend(); ++it) {
+            auto *line = stats->findChild<QLineEdit *>(it.key());
+            QVERIFY(line && line->isEnabled());
+            line->setText("31");
+            QVERIFY(QMetaObject::invokeMethod(line, "editingFinished"));
+        }
+        icons->setText("9");
+        QVERIFY(QMetaObject::invokeMethod(icons, "editingFinished"));
+        const QMap<QString, QPair<QString, int>> achievements = {
+            {"cb_backstabs", {"backstabCount", 20}}, {"cb_repostes", {"reposteCount", 20}},
+            {"cb_rebuffs", {"rebuffCount", 20}}, {"cb_remembered", {"itemsRemembered", 75}},
+            {"cb_unburdened", {"itemsHoovered", 71}}, {"cb_DLC", {"DLCItemsRemembered", 10}}
+        };
+        for (auto it = achievements.cbegin(); it != achievements.cend(); ++it) {
+            auto *box = stats->findChild<QCheckBox *>(it.key());
+            QVERIFY(box && box->isEnabled());
+            box->setChecked(true);
+        }
+        for (const auto *name : {"cb_help", "cb_restore_quests", "cb_all_spell", "cb_all_rune"}) {
+            auto *box = stats->findChild<QCheckBox *>(name);
+            QVERIFY(box && box->isEnabled());
+            box->setChecked(true);
+        }
+        SaveStore disk(paths);
+        QVERIFY2(disk.load(error), qPrintable(error));
+        QCOMPARE(disk.document().characters().size(), 2);
+        const auto &slot = disk.document().characters()[1];
+        for (const auto &field : fields) QCOMPARE(slot.character[field].toInt(), 31);
+        for (const auto &achievement : achievements)
+            QCOMPARE(slot.character[achievement.first].toInt(), achievement.second);
+        QCOMPARE(slot.character["maxIconUses"].toInt(), 9);
+        QCOMPARE(slot.info["bossFightAssistances"].toInt(), 0);
+        QCOMPARE(slot.quests["questStage_Main"].toInt(), 7);
+        QCOMPARE(slot.quests["questStage_Hoover"].toInt(), 10);
+        const auto inventory = slot.character["inventory"].toArray();
+        QCOMPARE(inventory.size(), 43); // existing entry + 17 spells + 25 runes
+        QCOMPARE(inventory[0].toObject()["GUID"].toString(), QString("unrelated"));
+        SaveDocument original;
+        QVERIFY(SaveDocument::parse(baseline, original, error));
+        QCOMPARE(disk.document().characters()[0].character, original.characters()[0].character);
+        QCOMPARE(disk.document().characters()[0].info, original.characters()[0].info);
+        QCOMPARE(disk.document().characters()[0].quests, original.characters()[0].quests);
+        QCOMPARE(read(paths.gameBackup()), QByteArray("companion"));
+        QCOMPARE(read(paths.legacyEditorBackup()), QByteArray("legacy"));
+        QCOMPARE(QFileInfo(paths.gameBackup()).lastModified(), companionTime);
+        QCOMPARE(QFileInfo(paths.legacyEditorBackup()).lastModified(), legacyTime);
+
+        // Simulate an external writer, wait for availability polling, and
+        // confirm the stale controls cannot replace the new disk bytes.
+        auto external = disk.document();
+        external.editCharacter(1).character["memory"] = 77;
+        const auto externalBytes = external.serialize();
+        QVERIFY(put(paths.primary(), externalBytes));
+        QTRY_VERIFY(!memory->isEnabled() && !icons->isEnabled());
+        memory->setText("99");
+        QVERIFY(QMetaObject::invokeMethod(memory, "editingFinished"));
+        QCOMPARE(read(paths.primary()), externalBytes);
+        tab->reloadSave();
+        QCOMPARE(selector->currentIndex(), 1);
+        QCOMPARE(memory->text(), QString("77"));
+        QVERIFY(memory->isEnabled() && icons->isEnabled());
+        QCOMPARE(read(paths.primary()), externalBytes);
     }
 
     void stubbedCatalog()

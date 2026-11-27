@@ -12,6 +12,7 @@ find_package(Qt6 REQUIRED COMPONENTS Core Widgets)
 add_library(savecore STATIC
     savepaths.h savepaths.cpp
     backupservice.h backupservice.cpp
+    restoreservice.h restoreservice.cpp
     savedocument.h savedocument.cpp
     savestore.h savestore.cpp
     jsonparser.h jsonparser.cpp
@@ -56,6 +57,16 @@ if(BUILD_TESTING)
     target_link_libraries(backupservice_tests PRIVATE savecore Qt6::Test)
     target_compile_definitions(backupservice_tests PRIVATE FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/Resources/Tests")
     add_test(NAME backupservice_tests COMMAND backupservice_tests)
+
+    add_executable(restoreservice_tests tests/restoreservice_tests.cpp)
+    target_link_libraries(restoreservice_tests PRIVATE savecore Qt6::Test)
+    target_compile_definitions(restoreservice_tests PRIVATE FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/Resources/Tests")
+    add_test(NAME restoreservice_tests COMMAND restoreservice_tests)
+    if(WIN32)
+        add_executable(restore_game_process_stub tests/game_process_stub.cpp)
+        set_target_properties(restore_game_process_stub PROPERTIES OUTPUT_NAME TLHON)
+        add_dependencies(restoreservice_tests restore_game_process_stub)
+    endif()
 
     add_executable(editor_tests tests/editor_tests.cpp ${EDITOR_SOURCES})
     target_link_libraries(editor_tests PRIVATE savecore Qt6::Widgets Qt6::Test)

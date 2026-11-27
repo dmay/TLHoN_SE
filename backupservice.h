@@ -11,7 +11,7 @@
 
 class QSettings;
 
-enum class BackupKind { Normal, Legacy };
+enum class BackupKind { Normal, Legacy, Safety };
 enum class BackupFileState { Present, Missing, NotCaptured };
 
 struct BackupFile
@@ -68,9 +68,11 @@ public:
     bool deleteSnapshot(const QString &id, bool confirmed, QString &error) const;
 
 private:
+    friend class RestoreService;
     bool ensureRoot(bool create, QString &error) const;
+    // Safety capture is only called while RestoreService holds the source lock.
     bool capture(BackupKind kind, const QString &label, BackupSnapshot &result,
-                 QString &error, const CancelCheck &canceled) const;
+                 QString &error, const CancelCheck &canceled, bool sourceLocked = false) const;
     bool snapshotPath(const QString &id, QString &path, QString &error) const;
     SavePaths paths;
     QString root;

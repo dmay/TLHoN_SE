@@ -10,6 +10,7 @@ public:
     JsonParser() = delete;
     static void configure(const SavePaths &paths);
     static bool init(QString &error);
+    static void invalidate();
     static const SavePaths &paths();
     static const QList<SaveCharacter> &characters();
     static bool canEdit();

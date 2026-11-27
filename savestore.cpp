@@ -1,4 +1,5 @@
 #include "savestore.h"
+#include "restoreservice.h"
 
 #include <QFile>
 #include <QFileInfo>
@@ -49,13 +50,17 @@ SaveStore::SaveStore(SavePaths paths) : savePaths(std::move(paths)) {}
 
 bool SaveStore::canEdit() const
 {
-    return loaded && !current.characters().isEmpty() && writable(savePaths.primary());
+    return loaded && !RestoreService::hasPending(savePaths) && !current.characters().isEmpty() && writable(savePaths.primary());
 }
 
 bool SaveStore::load(QString &error)
 {
     // Retain the last good document on failure, but do not allow edits to it.
     loaded = false;
+    if (RestoreService::hasPending(savePaths)) {
+        error = "Interrupted restore must be recovered before loading or editing.";
+        return false;
+    }
     QByteArray bytes;
     SaveDocument candidate;
     if (!readFile(savePaths.primary(), bytes, error))
@@ -85,8 +90,14 @@ bool SaveStore::mutateCharacter(int index, const std::function<void(SaveCharacte
     // Serialize concurrent writes by cooperating editor instances. The game
     // does not participate in this lock: always close it before editing.
     QLockFile lock(path + ".editor.lock");
+    lock.setStaleLockTime(0);
     if (!lock.tryLock(0)) {
         error = QString("Cannot lock '%1' for editing. Check directory permissions and other editor instances.").arg(path);
+        return false;
+    }
+    if (RestoreService::hasPending(savePaths)) {
+        loaded = false;
+        error = "Interrupted restore must be recovered before editing.";
         return false;
     }
     if (!unchanged(path, loadedBytes, error))

@@ -2,7 +2,7 @@
 
 Settings → Backup / recovery has temporary actions to create a snapshot, choose
 its storage folder, and import the older editor backup. Close the game first;
-Steam Cloud and the game do not honor editor locks. DIG-119 adds restore and
+Steam Cloud and the game do not honor editor locks. DIG-119 adds [restore and recovery](restore-recovery.md), and
 DIG-120 replaces the temporary actions with the full Backup Manager.
 
 - Default root: `%LOCALAPPDATA%/TLHoN_SE/Backups` (Qt generic local data fallback).
@@ -15,7 +15,7 @@ DIG-120 replaces the temporary actions with the full Backup Manager.
   published by directory rename. Abandoned `.staging-*` directories are not
   completed catalog entries.
 - Manifest v1: `id` (directory basename), `version`, UTC `createdAt`, `kind`
-  (`normal` or `legacy`), `label`, `sourceDirectory`, `sourceProfile`, and
+  (`normal`, `legacy`, or `safety`), `label`, `sourceDirectory`, `sourceProfile`, and
   ordered `files`. Each record has its exact original filename and state
   (`present`, `missing`, or `notCaptured`); present entries also include decimal
   string size in bytes and lowercase SHA-256 hex.
@@ -31,7 +31,9 @@ DIG-120 replaces the temporary actions with the full Backup Manager.
   filename (no bytes on failure). `renameLabel` atomically replaces only the
   manifest of a valid entry. `deleteSnapshot` requires explicit confirmation
   for a basename, rejects traversal, links and unexpected entries, and never
-  recursively deletes arbitrary files. Failed cleanup is reported with a
+  recursively deletes arbitrary files. If the manifest cannot identify the
+  kind, deletion is blocked to avoid deleting an unidentified safety snapshot.
+  Failed cleanup is reported with a
   separate unpublished `.deleted-*` directory.
 - Capture uses the same `.editor.lock` as SaveStore; it rereads the full source
   set before publication, including optional-file presence. This detects
@@ -42,11 +44,10 @@ DIG-120 replaces the temporary actions with the full Backup Manager.
 
 ## Restore integration
 
-Use `BackupService(paths, BackupService::configuredStorageDirectory(settings))`
-and `readVerified(id, snapshot, bytes, error)`. For normal snapshots use
-`bytes["SaveData.txt"]` and the explicit companion state. For legacy use
-`bytes["SaveData.txt_bckp"]` as a primary-only source; do not infer anything
-about the game companion. The service does not write to game saves. DIG-119
-must extend capture for missing-primary safety snapshots and coordinate the
-editor lock across the restore transaction (normal capture currently acquires
-it itself); do not call normal capture while already holding that lock.
+Use [RestoreService and the confirmed restore flow](restore-recovery.md).
+Automatic pre-restore safety snapshots use the same manifest with kind
+`safety`; both primary and companion may be missing, and existing files
+are captured even if the primary is malformed. Only the restore transaction
+creates this kind, while holding the source lock. Safety snapshots are not
+renamed or deleted by the catalog API; a valid primary may be restored as a
+normal full save. During interrupted restoration new captures are blocked.

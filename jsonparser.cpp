@@ -1,11 +1,18 @@
 #include "jsonparser.h"
+#include "restoreservice.h"
 
 namespace {
 SaveStore store;
 const QList<SaveCharacter> noCharacters;
 }
 void JsonParser::configure(const SavePaths &paths) { store = SaveStore(paths); }
-bool JsonParser::init(QString &error) { return store.load(error); }
+bool JsonParser::init(QString &error)
+{
+    store.invalidate();
+    if (!RestoreService::recoverPending(store.paths(), error)) return false;
+    return store.load(error);
+}
+void JsonParser::invalidate() { store.invalidate(); }
 const SavePaths &JsonParser::paths() { return store.paths(); }
 const QList<SaveCharacter> &JsonParser::characters()
 {

@@ -31,7 +31,9 @@ DIG-120 replaces the temporary actions with the full Backup Manager.
   filename (no bytes on failure). `renameLabel` atomically replaces only the
   manifest of a valid entry. `deleteSnapshot` requires explicit confirmation
   for a basename, rejects traversal, links and unexpected entries, and never
-  recursively deletes arbitrary files. Failed cleanup is reported with a
+  recursively deletes arbitrary files. If the manifest cannot identify the
+  kind, deletion is blocked to avoid deleting an unidentified safety snapshot.
+  Failed cleanup is reported with a
   separate unpublished `.deleted-*` directory.
 - Capture uses the same `.editor.lock` as SaveStore; it rereads the full source
   set before publication, including optional-file presence. This detects

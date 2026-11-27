@@ -90,6 +90,7 @@ bool SaveStore::mutateCharacter(int index, const std::function<void(SaveCharacte
     // Serialize concurrent writes by cooperating editor instances. The game
     // does not participate in this lock: always close it before editing.
     QLockFile lock(path + ".editor.lock");
+    lock.setStaleLockTime(0);
     if (!lock.tryLock(0)) {
         error = QString("Cannot lock '%1' for editing. Check directory permissions and other editor instances.").arg(path);
         return false;

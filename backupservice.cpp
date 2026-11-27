@@ -389,6 +389,7 @@ bool BackupService::capture(BackupKind kind, const QString &label, BackupSnapsho
     // Cooperate with SaveStore. The game/Steam do not honor the editor lock;
     // compare the complete pair again just before publishing the snapshot.
     QLockFile sourceLock(paths.primary() + ".editor.lock");
+    sourceLock.setStaleLockTime(0);
     if (!sourceLocked && !sourceLock.tryLock(0))
         return fail(error, "Cannot lock save directory. Close the game and other editor instances, and check permissions.");
     if (RestoreService::hasPending(paths))
@@ -540,8 +541,10 @@ bool BackupService::deleteSnapshot(const QString &id, bool confirmed, QString &e
     QByteArray manifest;
     BackupSnapshot snapshot;
     QString diagnostic;
-    if (readRegular(QDir(path).filePath(manifestName), manifest, diagnostic) &&
-        decodeManifest(manifest, id, snapshot, diagnostic) && snapshot.kind == BackupKind::Safety)
+    if (!readRegular(QDir(path).filePath(manifestName), manifest, diagnostic) ||
+        !decodeManifest(manifest, id, snapshot, diagnostic))
+        return fail(error, "Cannot identify snapshot kind safely. Preserve the directory for manual inspection.");
+    if (snapshot.kind == BackupKind::Safety)
         return fail(error, "Automatic safety snapshots are immutable.");
     // Never recursively delete arbitrary contents. Unpublish the selected
     // directory first so a partial cleanup cannot look like a usable backup.

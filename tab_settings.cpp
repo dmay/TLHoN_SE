@@ -184,13 +184,17 @@ void Tab_Settings::restoreSnapshot(const QString &id)
     }
     QString details = tr("Snapshot: %1\nSource: %2\nTarget: %3\n\nFiles:")
         .arg(preview.snapshot.id, preview.snapshot.sourceDirectory, preview.targetDirectory);
+    QStringList summary;
     for (const auto &file : preview.snapshot.files) {
         if (file.state == BackupFileState::Present) {
+            summary.append(tr("%1 — %2 bytes").arg(file.name, QString::number(file.size)));
             details += QString("\n%1 — %2 bytes; SHA-256 %3").arg(
                 file.name, QString::number(file.size), QString::fromLatin1(file.sha256));
         } else {
-            details += "\n" + file.name + " — " +
-                (file.state == BackupFileState::Missing ? tr("Missing (remove from target)") : tr("Not captured (leave unchanged)"));
+            const auto state = file.state == BackupFileState::Missing
+                ? tr("Missing (remove from target)") : tr("Not captured (leave unchanged)");
+            summary.append(file.name + " — " + state);
+            details += "\n" + file.name + " — " + state;
         }
     }
     const QString scope = preview.snapshot.kind == BackupKind::Legacy
@@ -206,8 +210,8 @@ void Tab_Settings::restoreSnapshot(const QString &id)
     QMessageBox confirm(QMessageBox::Warning, tr("Confirm restore"), warning,
                         QMessageBox::Yes | QMessageBox::No, this);
     confirm.setDefaultButton(QMessageBox::No);
-    confirm.setInformativeText(tr("Snapshot: %1\nTarget: %2").arg(
-        preview.snapshot.id, preview.targetDirectory));
+    confirm.setInformativeText(tr("Snapshot: %1\nTarget: %2\n%3").arg(
+        preview.snapshot.id, preview.targetDirectory, summary.join("\n")));
     confirm.setDetailedText(details);
     if (confirm.exec() != QMessageBox::Yes) return;
 

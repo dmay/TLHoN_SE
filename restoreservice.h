@@ -18,7 +18,7 @@ class RestoreService
 {
 public:
     using GameCheck = std::function<bool(QString &)>;
-    // Deterministic failure injection before each changed file is published.
+    // Deterministic failure injection before each publish and final verification.
     // Production callers leave this empty.
     using StepCheck = std::function<bool(int, QString &)>;
 

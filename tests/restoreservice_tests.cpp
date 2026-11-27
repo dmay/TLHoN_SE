@@ -311,6 +311,25 @@ private slots:
         QVERIFY(!QFileInfo::exists(s.paths.gameBackup()));
         QVERIFY(!RestoreService::hasPending(s.paths));
         QVERIFY(s.backups.inspect(safety.id, another, error));
+
+        // Interrupt after BOTH commits, but before final verification and
+        // journal cleanup. Rollback must also remove the new companion.
+        QVERIFY(s.restores.preview(chosen.id, preview, error));
+        RestoreService crashAfterBoth(s.paths, s.storage, closed, [](int completed, QString &) {
+            if (completed == 2) throw std::runtime_error("interrupted after both commits");
+            return true;
+        });
+        interrupted = false;
+        try { crashAfterBoth.restore(preview, safety, error); }
+        catch (const std::runtime_error &) { interrupted = true; }
+        QVERIFY(interrupted);
+        QVERIFY(RestoreService::hasPending(s.paths));
+        QCOMPARE(read(s.paths.primary()), multi);
+        QCOMPARE(read(s.paths.gameBackup()), QByteArray("A"));
+        QVERIFY2(RestoreService::recoverPending(s.paths, error, closed), qPrintable(error));
+        QCOMPARE(read(s.paths.primary()), fixture("SaveData.txt"));
+        QVERIFY(!QFileInfo::exists(s.paths.gameBackup()));
+        QVERIFY(!RestoreService::hasPending(s.paths));
     }
 
     void externalChangeAndDamagedJournal()

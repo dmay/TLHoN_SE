@@ -202,6 +202,10 @@ bool applyPair(const SavePaths &paths, const Pair &start, const Pair &desired,
         }
         ++completed;
     }
+    // A crash even after the final replacement but before journal cleanup
+    // must restore the old pair, rather than implicitly commit on startup.
+    if (stepCheck && !stepCheck(completed, error)) return false;
+    if (!gameCheck(error)) return false;
     Pair actual;
     if (!readPair(paths, actual, error)) return false;
     if (actual != desired) return fail(error, "Final restored files do not match the expected bytes.");
@@ -315,6 +319,7 @@ bool RestoreService::restore(const RestorePreview &confirmed, BackupSnapshot &sa
         return fail(error, "Restore target changed; confirm again.");
     if (!QDir().mkpath(paths.directory())) return fail(error, "Cannot create save directory.");
     QLockFile lock(paths.primary() + ".editor.lock");
+    lock.setStaleLockTime(0);
     if (!lock.tryLock(0)) return fail(error, "Cannot lock save directory. Close other editor instances.");
 
     RestorePreview current;
@@ -353,6 +358,7 @@ bool RestoreService::recoverPending(const SavePaths &paths, QString &error, Game
     error.clear();
     if (!hasPending(paths)) return true;
     QLockFile lock(paths.primary() + ".editor.lock");
+    lock.setStaleLockTime(0);
     if (!lock.tryLock(0)) return fail(error, recoveryMessage(paths, "Cannot lock save directory for recovery."));
     if (!hasPending(paths)) return true;
     const GameCheck check = gameCheck ? std::move(gameCheck) : GameCheck(gameClosed);

@@ -69,8 +69,8 @@ public:
 
 private:
     friend class RestoreService;
-    // Safety capture is only called while RestoreService holds the source lock.
     bool ensureRoot(bool create, QString &error) const;
+    // Safety capture is only called while RestoreService holds the source lock.
     bool capture(BackupKind kind, const QString &label, BackupSnapshot &result,
                  QString &error, const CancelCheck &canceled, bool sourceLocked = false) const;
     bool snapshotPath(const QString &id, QString &path, QString &error) const;

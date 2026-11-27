@@ -24,4 +24,62 @@ jobs:
       - name: Build
         run: cmake --build build --config Release --parallel
       - name: Test
-        run: ctest --test-dir build -C Release --output-on-failure
+        run: ctest --test-dir build -C Release --verbose --output-on-failure
+
+      - name: Install and deploy editor
+        shell: pwsh
+        run: |
+          $package = Join-Path $env:RUNNER_TEMP "tlhon-package"
+          cmake --install build --config Release --prefix "$package"
+          if ($LASTEXITCODE -ne 0) { throw "Install failed" }
+          windeployqt --release "$package/bin/TLHoN_SE.exe"
+          if ($LASTEXITCODE -ne 0) { throw "Qt deployment failed" }
+          foreach ($file in @("TLHoN_SE.exe", "Qt6Core.dll", "Qt6Gui.dll",
+                             "Qt6Widgets.dll", "platforms/qwindows.dll")) {
+            if (!(Test-Path "$package/bin/$file")) { throw "Missing deployed file: $file" }
+          }
+      - name: Packaged editor smoke (disposable fixture)
+        shell: pwsh
+        run: |
+          $package = Join-Path $env:RUNNER_TEMP "tlhon-package"
+          $saves = Join-Path $env:RUNNER_TEMP "tlhon-smoke-saves"
+          New-Item -ItemType Directory -Path $saves | Out-Null
+          Copy-Item Resources/Tests/SaveData.txt "$saves/SaveData.txt"
+          Copy-Item Resources/Tests/SaveData1.txt "$saves/SaveData.txt.bak"
+          $primary = (Get-FileHash "$saves/SaveData.txt").Hash
+          $companion = (Get-FileHash "$saves/SaveData.txt.bak").Hash
+          Write-Host "Packaging smoke before: primary=$primary companion=$companion"
+          # Do not let the installed Qt SDK mask missing deployed libraries.
+          $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+          Remove-Item Env:QT_PLUGIN_PATH, Env:QT_QPA_PLATFORM_PLUGIN_PATH -ErrorAction SilentlyContinue
+          $env:QT_QPA_PLATFORM = 'windows'
+          $process = Start-Process -FilePath "$package/bin/TLHoN_SE.exe" `
+            -ArgumentList @('--save-dir', ('"{0}"' -f $saves)) `
+            -WorkingDirectory "$saves" -PassThru
+          try {
+            $deadline = (Get-Date).AddSeconds(30)
+            do {
+              Start-Sleep -Milliseconds 250
+              $process.Refresh()
+              if ($process.HasExited) { throw "Editor exited early: $($process.ExitCode)" }
+            } until ($process.MainWindowHandle -ne 0 -or (Get-Date) -gt $deadline)
+            if ($process.MainWindowHandle -eq 0) { throw "Editor window did not appear" }
+            $log = Get-Content "$saves/log.txt" -Raw
+            $effective = $saves.Replace('\', '/')
+            if (!$log.Contains('Save directory: "' + $effective + '"')) {
+              throw "Smoke did not confirm its disposable target: $log"
+            }
+            if (!$process.CloseMainWindow() -or !$process.WaitForExit(10000)) {
+              throw "Editor did not close normally"
+            }
+            if ($process.ExitCode -ne 0) { throw "Editor exit code $($process.ExitCode)" }
+          } finally {
+            if (!$process.HasExited) { Stop-Process -Id $process.Id -Force }
+          }
+          $afterPrimary = (Get-FileHash "$saves/SaveData.txt").Hash
+          $afterCompanion = (Get-FileHash "$saves/SaveData.txt.bak").Hash
+          Write-Host "Packaging smoke after: primary=$afterPrimary companion=$afterCompanion"
+          if ($afterPrimary -ne $primary -or $afterCompanion -ne $companion) {
+            throw "Opening/closing the packaged editor changed the save pair"
+          }
+          if (Test-Path "$saves/SaveData.txt_bckp") { throw "Unexpected legacy backup created" }

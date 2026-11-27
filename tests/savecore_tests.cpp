@@ -1,4 +1,6 @@
 #include "savestore.h"
+#include "backupservice.h"
+#include <QStandardPaths>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -38,6 +40,25 @@ private slots:
         QCOMPARE(paths.primary(), QDir(dir.path()).filePath("SaveData.txt"));
         QCOMPARE(paths.gameBackup(), paths.primary() + ".bak");
         QCOMPARE(paths.legacyEditorBackup(), paths.primary() + "_bckp");
+    }
+
+    void defaultPathsDoNotAccessLiveSaves()
+    {
+        // Resolve only: never open, create or mutate the default paths.
+        const auto profile = qEnvironmentVariable("USERPROFILE", QDir::homePath());
+        const auto local = qEnvironmentVariable("LOCALAPPDATA");
+        const QDir expectedSave(QDir(profile).filePath("AppData/LocalLow/OverTheMoon/TLHON"));
+        const QDir expectedBackup(QDir(local.isEmpty()
+            ? QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) : local)
+            .filePath("TLHoN_SE/Backups"));
+        const SavePaths paths;
+        QCOMPARE(paths.directory(), expectedSave.absolutePath());
+        QCOMPARE(paths.primary(), expectedSave.absoluteFilePath("SaveData.txt"));
+        QCOMPARE(paths.gameBackup(), expectedSave.absoluteFilePath("SaveData.txt.bak"));
+        QCOMPARE(paths.legacyEditorBackup(), expectedSave.absoluteFilePath("SaveData.txt_bckp"));
+        QCOMPARE(QDir(BackupService::defaultStorageDirectory()).absolutePath(), expectedBackup.absolutePath());
+        if (!local.isEmpty())
+            QCOMPARE(BackupService(paths).storageDirectory(), expectedBackup.absolutePath());
     }
 
     void roundtrip_data()

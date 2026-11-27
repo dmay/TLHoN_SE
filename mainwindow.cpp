@@ -1,7 +1,7 @@
 #include "mainwindow.h"
 #include "./ui_mainwindow.h"
 
-// #include "tab_equipment.h"
+#include "tab_equipment.h"
 #include "tab_stats.h"
 #include "tab_inventory.h"
 #include "tab_settings.h"
@@ -20,16 +20,17 @@ MainWindow::MainWindow(QWidget *parent) :
     QFontDatabase::addApplicationFont(":/Resources/Fonts/PressStart2P-Regular.ttf");
     setWindowIcon(QIcon(":/Resources/Images/Misc/icon.ico"));
 
-    // tab_equipment = new Tab_Equipment(ui->Equipment);
+    tab_equipment = new Tab_Equipment(ui->Equipment);
     tab_inventory = new Tab_Inventory();
     tab_stats = new Tab_Stats();
     tab_settings = new Tab_Settings();
     tab_about = new Tab_About();
 
-    // tab_equipment->initSettings(tab_settings);
+    tab_equipment->initSettings(tab_settings, tab_inventory);
     tab_inventory->initSettings(tab_settings);
     tab_stats->initSettings(tab_settings);
     tab_stats->initInventory(tab_inventory);
+    connect(tab_stats, &Tab_Stats::legacyInventoryChanged, tab_equipment, &Tab_Equipment::refresh);
     tab_about->initSettings(tab_settings);
 
     ui->btn_equipment->setCheckable(true);
@@ -56,7 +57,7 @@ MainWindow::MainWindow(QWidget *parent) :
 
     connect(tab_settings, &Tab_Settings::languageChanged, [this]() { emit ui->retranslateUi(this); });
 
-    // ui->vl_equipment_layout->addWidget(tab_equipment);
+    ui->vl_equipment_layout->addWidget(tab_equipment);
     ui->vl_inventory_layout->addWidget(tab_inventory);
     ui->vl_stats_layout->addWidget(tab_stats);
     ui->vl_settings_layout->addWidget(tab_settings);
@@ -94,13 +95,6 @@ void MainWindow::onTabButtonClicked(QPushButton *button, QLabel *label, int tabI
 MainWindow::~MainWindow()
 {
     delete ui;
-    delete checked_btn;
-    delete checked_label;
-
-    // delete tab_equipment;
-    delete tab_stats;
-    delete tab_inventory;
-    delete tab_settings;
-    delete tab_about;
+    // Qt parent ownership releases the widgets inserted in the layouts.
 }
 

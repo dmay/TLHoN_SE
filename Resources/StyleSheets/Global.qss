@@ -8,11 +8,6 @@ QLabel
 
 QTabWidget::pane { border: 5px dashed #fff; }
 
-QWidget#Equipment
-{
-    image: url(:/Resources/Images/Misc/Temp_note.png);
-}
-
 QPushButton#btn_equipment
 {
     background-image: url(:/Resources/Images/Tabs/CategoryTab_Equipment.png);

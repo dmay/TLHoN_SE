@@ -175,40 +175,152 @@
 <context>
     <name>Tab_Equipment</name>
     <message>
-        <location filename="../tab_equipment.ui" line="29"/>
-        <location filename="../build/Desktop_Qt_6_8_0_MinGW_64_bit-Release/TLHoN_SE_autogen/include/ui_tab_equipment.h" line="369"/>
-        <source>  Левая рука</source>
-        <translation>Off hand</translation>
+        <source>Нет персонажа</source>
+        <translation>No character</translation>
     </message>
     <message>
-        <location filename="../tab_equipment.ui" line="567"/>
-        <location filename="../build/Desktop_Qt_6_8_0_MinGW_64_bit-Release/TLHoN_SE_autogen/include/ui_tab_equipment.h" line="385"/>
-        <source>Физическая</source>
-        <translation>Physical</translation>
+        <source>Выберите персонажа в настройках.</source>
+        <translation>Select a character in Settings.</translation>
     </message>
     <message>
-        <location filename="../tab_equipment.ui" line="596"/>
-        <location filename="../build/Desktop_Qt_6_8_0_MinGW_64_bit-Release/TLHoN_SE_autogen/include/ui_tab_equipment.h" line="386"/>
-        <source>Упадок</source>
-        <translation>Degradation</translation>
+        <source>Персонаж %1: %2</source>
+        <translation>Character %1: %2</translation>
     </message>
     <message>
-        <location filename="../tab_equipment.ui" line="615"/>
-        <location filename="../build/Desktop_Qt_6_8_0_MinGW_64_bit-Release/TLHoN_SE_autogen/include/ui_tab_equipment.h" line="387"/>
+        <source>Снять (%1)</source>
+        <translation>Unequip (%1)</translation>
+    </message>
+    <message>
+        <source>Только чтение: %1</source>
+        <translation>Read-only: %1</translation>
+    </message>
+    <message>
+        <source>Несохранённая экипировка</source>
+        <translation>Unsaved equipment</translation>
+    </message>
+    <message>
+        <source>Отменить несохранённые изменения экипировки?</source>
+        <translation>Discard unsaved equipment changes?</translation>
+    </message>
+    <message>
+        <source>Контекст изменился. Несохранённая экипировка отменена.</source>
+        <translation>Context changed. Unsaved equipment changes were discarded.</translation>
+    </message>
+    <message>
+        <source>Ячейка %1</source>
+        <translation>Slot %1</translation>
+    </message>
+    <message>
+        <source>Ячейка %1 (только чтение)</source>
+        <translation>Slot %1 (read-only)</translation>
+    </message>
+    <message>
+        <source>Сохранено: %1</source>
+        <translation>Saved: %1</translation>
+    </message>
+    <message>
+        <source>Выбрано: %1</source>
+        <translation>Selected: %1</translation>
+    </message>
+    <message>
+        <source>Нет других проверенных принадлежащих предметов.</source>
+        <translation>No other verified owned items.</translation>
+    </message>
+    <message>
+        <source>Редактирование недоступно. Закройте игру, завершите синхронизацию Steam и перезагрузите сохранение.</source>
+        <translation>Editing unavailable. Close the game, finish Steam sync, and reload the save.</translation>
+    </message>
+    <message>
+        <source>Изменения не сохранены. Примените или отмените.</source>
+        <translation>Changes not saved. Apply or cancel.</translation>
+    </message>
+    <message>
+        <source>Недопустимая экипировка: %1</source>
+        <translation>Invalid equipment: %1</translation>
+    </message>
+    <message>
+        <source>Доступны только проверенные принадлежащие предметы. Откройте каталог и проверенный список на вкладке «Сумка» для дополнительных вариантов.</source>
+        <translation>Only verified owned items are available. Load the catalog and reviewed list in Inventory for more options.</translation>
+    </message>
+    <message>
+        <source>Персонаж или сохранение изменились. Перезагрузите сохранение и повторите.</source>
+        <translation>Character or save changed. Reload the save and try again.</translation>
+    </message>
+    <message>
+        <source>Экипировка сохранена.</source>
+        <translation>Equipment saved.</translation>
+    </message>
+    <message>
+        <source>Сохранение не изменено: %1</source>
+        <translation>Save unchanged: %1</translation>
+    </message>
+    <message>
         <source>Броня</source>
         <translation>Armor</translation>
     </message>
     <message>
-        <location filename="../tab_equipment.ui" line="647"/>
-        <location filename="../build/Desktop_Qt_6_8_0_MinGW_64_bit-Release/TLHoN_SE_autogen/include/ui_tab_equipment.h" line="388"/>
-        <source>Источник</source>
-        <translation>Source</translation>
+        <source>Голова</source>
+        <translation>Helm</translation>
     </message>
     <message>
-        <location filename="../tab_equipment.ui" line="660"/>
-        <location filename="../build/Desktop_Qt_6_8_0_MinGW_64_bit-Release/TLHoN_SE_autogen/include/ui_tab_equipment.h" line="389"/>
-        <source>Вес</source>
-        <translation>Load</translation>
+        <source>Торс</source>
+        <translation>Torso</translation>
+    </message>
+    <message>
+        <source>Руки</source>
+        <translation>Arms</translation>
+    </message>
+    <message>
+        <source>Ноги</source>
+        <translation>Legs</translation>
+    </message>
+    <message>
+        <source>Кольца</source>
+        <translation>Rings</translation>
+    </message>
+    <message>
+        <source>Правая рука</source>
+        <translation>Right hand</translation>
+    </message>
+    <message>
+        <source>Левая рука</source>
+        <translation>Left hand</translation>
+    </message>
+    <message>
+        <source>Расходники</source>
+        <translation>Consumables</translation>
+    </message>
+    <message>
+        <source>Активная</source>
+        <translation>Active</translation>
+    </message>
+    <message>
+        <source>Применить</source>
+        <translation>Apply</translation>
+    </message>
+    <message>
+        <source>Отменить</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
+        <source>Ячейка 1</source>
+        <translation>Slot 1</translation>
+    </message>
+    <message>
+        <source>Ячейка 2</source>
+        <translation>Slot 2</translation>
+    </message>
+    <message>
+        <source>Ячейка 3</source>
+        <translation>Slot 3</translation>
+    </message>
+    <message>
+        <source>Ячейка 4</source>
+        <translation>Slot 4</translation>
+    </message>
+    <message>
+        <source>Ячейка 5</source>
+        <translation>Slot 5</translation>
     </message>
 </context>
 <context>
@@ -700,6 +812,10 @@ Profile: %3</translation>
 </context>
 <context>
     <name>Tab_Inventory</name>
+    <message>
+        <source>Каталог или проверенный список изменились. Перезагрузите каталог.</source>
+        <translation>Catalog or reviewed list changed. Reload the catalog.</translation>
+    </message>
     <message>
         <source>Найти игру в Steam</source>
         <translation>Find Steam game</translation>

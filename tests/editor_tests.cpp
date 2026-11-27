@@ -6,6 +6,7 @@
 #include "tab_settings.h"
 #include "tab_stats.h"
 #include "tab_inventory.h"
+#include "tab_equipment.h"
 #include <QJsonDocument>
 #include <QUuid>
 #include <QCheckBox>
@@ -418,6 +419,12 @@ private slots:
         ownedSearch->setText("Sample Helmet");
         QCOMPARE(ownedTable->rowCount(), 1);
         QCOMPARE(ownedTable->item(0, 0)->text(), QString("Sample Helmet"));
+        // The real grant signal refreshes equipment even while hidden.
+        auto *equipment = window.findChild<Tab_Equipment *>();
+        QVERIFY(equipment);
+        auto *helm = equipment->findChild<QComboBox *>("slotHelm");
+        QVERIFY(helm);
+        QVERIFY(helm->findText("Sample Helmet", Qt::MatchStartsWith) >= 0);
         ownedCategory->setCurrentIndex(2); // weapons only
         QCOMPARE(ownedTable->rowCount(), 0);
         ownedCategory->setCurrentIndex(1); // armor only
@@ -507,6 +514,240 @@ private slots:
         settings->reloadSave();
         QVERIFY(!add->isEnabled() && !allArmor->isEnabled());
         QVERIFY(!QFile::exists(paths.primary()));
+    }
+
+    void equipmentUi()
+    {
+        QTemporaryDir saves, prefs, storage;
+        QVERIFY(saves.isValid() && prefs.isValid() && storage.isValid());
+        QSettings::setDefaultFormat(QSettings::IniFormat);
+        QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, prefs.path());
+        QSettings("DeathWhisper", "TLHoN_SE").setValue("Language", "0");
+        JsonParser::configure(SavePaths(saves.path()));
+        const auto paths = JsonParser::paths();
+        const auto put = [](const QString &path, const QByteArray &bytes) {
+            QFile file(path);
+            return file.open(QIODevice::WriteOnly) && file.write(bytes) == bytes.size() && file.flush();
+        };
+        const auto read = [](const QString &path) {
+            QFile file(path);
+            return file.open(QIODevice::ReadOnly) ? file.readAll() : QByteArray{};
+        };
+        QString error;
+        SaveDocument original;
+        QVERIFY2(SaveDocument::parse(read(QDir(FIXTURE_DIR).filePath("SaveData.txt")), original, error), qPrintable(error));
+        auto &character = original.editCharacter(1).character;
+        auto generic = character.value("inventory").toArray();
+        auto weapons = character.value("inventoryWeapons").toArray();
+        const auto addItem = [](QJsonArray &items, const QString &guid, const QString &id) {
+            auto item = items.first().toObject();
+            item["GUID"] = guid;
+            item["instanceIDOnCreation"] = id;
+            item["testUnknownField"] = QJsonArray{1, "keep"};
+            items.append(item);
+        };
+        addItem(generic, "TestArmor", "armor-id");
+        addItem(generic, "TestRing", "ring-instance-id");
+        addItem(generic, "TestPotion", "potion-id");
+        addItem(weapons, "TestSword", "sword-1");
+        addItem(weapons, "TestSword", "sword-2");
+        addItem(weapons, "UnreviewedSword", "unreviewed-id");
+        character["inventory"] = generic;
+        character["inventoryWeapons"] = weapons;
+        // Preserve a dangling reference in an unrelated slot.
+        character["equipedRings"] = QJsonArray{"NULL", "unknown-ring"};
+        const auto baseline = original.serialize();
+        QVERIFY(put(paths.primary(), baseline));
+        QVERIFY(put(paths.gameBackup(), "companion"));
+        QVERIFY(put(paths.legacyEditorBackup(), "legacy"));
+        QSettings preferences("DeathWhisper", "TLHoN_SE");
+        QVERIFY2(BackupService::configureStorageDirectory(preferences, paths, storage.path(), error), qPrintable(error));
+        BackupService backups(paths, storage.path());
+        BackupSnapshot snapshot;
+        QVERIFY2(backups.createSnapshot("Before equipment edits", snapshot, error), qPrintable(error));
+        QVERIFY2(JsonParser::init(error), qPrintable(error));
+
+        const QString catalogPath = saves.filePath("catalog.json"), reviewPath = saves.filePath("review.json");
+        const ItemCatalog::Source source{catalogPath, "synthetic"};
+        const QJsonArray ids{
+            "Assets/Design/GameplayData/Items/Armour/TestArmor.asset",
+            "Assets/Design/GameplayData/Items/Relics/TestRing.asset",
+            "Assets/Design/GameplayData/Items/Consumables/TestPotion.asset",
+            "Assets/Design/GameplayData/Items/Weapons/Swords/TestSword.asset",
+            "Assets/Design/GameplayData/Items/Weapons/Swords/UnreviewedSword.asset"
+        };
+        QVERIFY(put(catalogPath, QJsonDocument(QJsonObject{{"m_InternalIds", ids}}).toJson()));
+        ItemCatalog::Catalog catalog;
+        QVERIFY2(ItemCatalog::load(source, catalog, error), qPrintable(error));
+        QJsonArray rows;
+        for (const auto &guid : {"TestArmor", "TestRing", "TestPotion", "TestSword"}) {
+            const auto *entry = catalog.find(guid);
+            QVERIFY(entry);
+            QJsonObject row{{"guid", guid}, {"sourcePath", entry->sourcePaths.first()},
+                {"category", ItemCatalog::categoryName(entry->category)}, {"status", "equip"},
+                {"dlc", "base"}, {"evidence", "Synthetic UI test only"}, {"displayName", QString(guid) + " name"}};
+            if (entry->category == ItemCatalog::Category::Armor) row["slot"] = "helm";
+            else row["equipmentSlots"] = QJsonArray{entry->guid == "TestSword" ? "rightHand" :
+                entry->guid == "TestRing" ? "ring" : "consumable"};
+            rows.append(row);
+        }
+        auto review = QJsonObject{{"schemaVersion", 1}, {"catalogSha256", catalog.sha256}, {"entries", rows}};
+        const auto reviewBytes = QJsonDocument(review).toJson();
+        QVERIFY(put(reviewPath, reviewBytes));
+
+        MainWindow window;
+        window.show();
+        auto *settings = window.findChild<Tab_Settings *>();
+        auto *inventory = window.findChild<Tab_Inventory *>();
+        auto *equipment = window.findChild<Tab_Equipment *>();
+        QVERIFY(settings && inventory && equipment);
+        auto *selector = settings->findChild<QComboBox *>("cb_saves");
+        auto *language = settings->findChild<QComboBox *>("cb_language");
+        auto *apply = equipment->findChild<QPushButton *>("applyEquipment");
+        auto *cancel = equipment->findChild<QPushButton *>("cancelEquipment");
+        auto *status = equipment->findChild<QLabel *>("equipmentStatus");
+        const auto box = [&](const char *name) { return equipment->findChild<QComboBox *>(name); };
+        auto *helm = box("slotHelm");
+        auto *right1 = box("slotRight1");
+        auto *right2 = box("slotRight2");
+        auto *ring = box("slotRing1");
+        auto *unknown = box("slotRing2");
+        auto *potion = box("slotConsumable4");
+        auto *activeRight = box("activeRight");
+        auto *activePotion = box("activeConsumable");
+        QVERIFY(selector && language && apply && cancel && status && helm && right1 && right2 &&
+                ring && unknown && potion && activeRight && activePotion);
+        selector->setCurrentIndex(1);
+        window.findChild<QPushButton *>("btn_equipment")->click();
+        QVERIFY(equipment->isVisible());
+        QCOMPARE(equipment->findChildren<QComboBox *>().size(), 18);
+        QCOMPARE(helm->currentData().toString(), character["equipedHelm"].toString());
+        QCOMPARE(right1->currentData().toString(), character["slottedRightHands"].toArray().at(0).toString());
+        QCOMPARE(box("activeLeft")->currentData().toInt(), character["leftHandEquipIndex"].toInt());
+        QVERIFY(!apply->isEnabled() && !cancel->isEnabled());
+        QCOMPARE(read(paths.primary()), baseline);
+        QVERIFY(helm->findData("armor-id") < 0);
+        QVERIFY2(inventory->loadCatalog(source, reviewPath), qPrintable(error));
+        QCOMPARE(unknown->currentData().toString(), QString("unknown-ring"));
+        QVERIFY(!unknown->isEnabled());
+        QVERIFY(unknown->toolTip().contains("unknown-ring"));
+        QVERIFY(unknown->currentText().contains("Read-only"));
+        QVERIFY(!ring->isEditable());
+        QVERIFY(ring->findData("TestRing") >= 0 && ring->findData("ring-instance-id") < 0);
+        QVERIFY(right1->findData("sword-1") >= 0 && right1->findData("sword-2") >= 0);
+        QVERIFY(right1->itemText(right1->findData("sword-1")) != right1->itemText(right1->findData("sword-2")));
+        QVERIFY(box("slotLeft1")->findData("sword-1") < 0);
+        QVERIFY(right1->findData("unreviewed-id") < 0 && helm->findData("potion-id") < 0);
+        QVERIFY(helm->findData("armor-id") >= 0 && potion->findData("potion-id") >= 0);
+        const auto select = [](QComboBox *combo, const QVariant &id) {
+            combo->setCurrentIndex(combo->findData(id));
+        };
+        select(right1, "sword-1");
+        select(right2, "sword-1"); // duplicate reference is not a valid final state
+        QVERIFY(!apply->isEnabled() && cancel->isEnabled());
+        QVERIFY(status->text().contains("Duplicate equipment reference"));
+        QCOMPARE(read(paths.primary()), baseline);
+        cancel->click();
+        QVERIFY(!apply->isEnabled());
+        QCOMPARE(read(paths.primary()), baseline);
+
+        const auto stage = [&] {
+            select(helm, "armor-id");
+            select(right1, "sword-1");
+            select(right2, "sword-2");
+            select(ring, "TestRing");
+            select(potion, "potion-id");
+            select(activeRight, 1);
+            select(activePotion, 3);
+        };
+        stage();
+        QVERIFY(apply->isEnabled());
+        language->setCurrentIndex(1);
+        QVERIFY(apply->isEnabled());
+        QCOMPARE(right2->currentData().toString(), QString("sword-2"));
+        language->setCurrentIndex(0);
+        QCOMPARE(apply->text(), QString("Apply"));
+        QVERIFY(apply->isEnabled());
+        const auto answer = [&](bool yes) {
+            QTimer::singleShot(0, &window, [yes] {
+                if (auto *message = qobject_cast<QMessageBox *>(QApplication::activeModalWidget()))
+                    message->button(yes ? QMessageBox::Yes : QMessageBox::No)->click();
+            });
+        };
+        answer(false);
+        selector->setCurrentIndex(0);
+        QCOMPARE(selector->currentIndex(), 1);
+        QVERIFY(apply->isEnabled());
+        answer(true);
+        selector->setCurrentIndex(0);
+        QCOMPARE(selector->currentIndex(), 0);
+        QCOMPARE(helm->currentData().toString(), QString("NULL"));
+        QVERIFY(!apply->isEnabled());
+        selector->setCurrentIndex(1);
+        QCOMPARE(read(paths.primary()), baseline);
+        stage();
+
+        // A modified review cannot authorize the staged edit.
+        review["entries"] = QJsonArray{};
+        QVERIFY(put(reviewPath, QJsonDocument(review).toJson()));
+        apply->click();
+        QVERIFY(status->text().contains("Save unchanged"));
+        QCOMPARE(read(paths.primary()), baseline);
+        QVERIFY(put(reviewPath, reviewBytes));
+        QLockFile lock(paths.primary() + ".editor.lock");
+        QVERIFY(lock.tryLock(0));
+        apply->click();
+        QVERIFY(status->text().contains("Save unchanged"));
+        QCOMPARE(read(paths.primary()), baseline);
+        lock.unlock();
+        apply->click();
+        QVERIFY(!apply->isEnabled());
+        auto expected = original;
+        auto &changed = expected.editCharacter(1).character;
+        changed["equipedHelm"] = "armor-id";
+        changed["slottedRightHands"] = QJsonArray{"sword-1", "sword-2"};
+        changed["equipedRings"] = QJsonArray{"TestRing", "unknown-ring"};
+        changed["equipedConsumables"] = QJsonArray{"StartHeroIconGUID", "NULL", "NULL", "potion-id", "NULL"};
+        changed["rightHandEquipIndex"] = 1;
+        changed["selectedConsumableIndex"] = 3;
+        QCOMPARE(read(paths.primary()), expected.serialize());
+        QCOMPARE(read(paths.gameBackup()), QByteArray("companion"));
+        QCOMPARE(read(paths.legacyEditorBackup()), QByteArray("legacy"));
+        QCOMPARE(settings->reloadSave(), QString("Save reloaded."));
+        QCOMPARE(helm->currentData().toString(), QString("armor-id"));
+        QCOMPARE(ring->currentData().toString(), QString("TestRing"));
+        QCOMPARE(activePotion->currentData().toInt(), 3);
+
+        // Restore refreshes the actual displayed equipment from the snapshot.
+        QTimer dialogTimer;
+        connect(&dialogTimer, &QTimer::timeout, &window, [&] {
+            auto *message = qobject_cast<QMessageBox *>(QApplication::activeModalWidget());
+            if (!message || message->property("testHandled").toBool()) return;
+            message->setProperty("testHandled", true);
+            auto *button = message->button(message->windowTitle() == "Confirm restore" ? QMessageBox::Yes : QMessageBox::Ok);
+            if (button) QTimer::singleShot(0, button, [button] { button->click(); });
+        });
+        dialogTimer.start(5);
+        const auto restored = settings->restoreSnapshot(snapshot.id);
+        dialogTimer.stop();
+        QVERIFY(restored.contains("Restored and verified"));
+        QCOMPARE(read(paths.primary()), baseline);
+        QCOMPARE(helm->currentData().toString(), character["equipedHelm"].toString());
+        select(helm, "NULL"); // explicit unequip is staged, not written
+        QVERIFY(apply->isEnabled());
+        auto external = original;
+        external.editCharacter(0).character["memory"] = 123456;
+        QVERIFY(put(paths.primary(), external.serialize()));
+        apply->click();
+        QVERIFY(!apply->isEnabled());
+        QCOMPARE(read(paths.primary()), external.serialize());
+        cancel->click();
+        external.editCharacter(1).character["slottedRightHands"] = QJsonArray{};
+        QVERIFY(put(paths.primary(), external.serialize()));
+        settings->reloadSave();
+        QVERIFY(!helm->isEnabled() && !apply->isEnabled());
+        QVERIFY(status->text().contains("Unsupported equipment array"));
+        QCOMPARE(read(paths.primary()), external.serialize());
     }
 
     void ownedInventoryPropertyUi()

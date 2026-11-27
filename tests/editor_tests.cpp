@@ -193,6 +193,8 @@ private slots:
         auto *button = tab.findChild<QPushButton *>("btn_restore");
         QVERIFY(button);
         QCOMPARE(button->text(), QString("Backup Manager"));
+        // Queue action clicks after the timer callback returns. A repeating
+        // timer cannot re-enter itself while a nested modal exec is running.
         int stage = 0;
         bool namedVisible = false;
         bool renamedVisible = false;
@@ -203,11 +205,13 @@ private slots:
                 auto *table = manager->findChild<QTableWidget *>("snapshotTable");
                 if (stage == 0) {
                     stage = 1;
-                    manager->findChild<QPushButton *>("createBackup")->click();
+                    auto *action = manager->findChild<QPushButton *>("createBackup");
+                    QTimer::singleShot(0, action, &QPushButton::click);
                 } else if (stage == 2) {
                     namedVisible = table->rowCount() == 1 && table->item(0, 1)->text() == "Before boss";
                     stage = 3;
-                    manager->findChild<QPushButton *>("editLabel")->click();
+                    auto *action = manager->findChild<QPushButton *>("editLabel");
+                    QTimer::singleShot(0, action, &QPushButton::click);
                 } else if (stage == 4) {
                     renamedVisible = table->rowCount() == 1 && table->item(0, 1)->text() == "After rename";
                     stage = 5;
@@ -215,7 +219,8 @@ private slots:
                 } else if (stage == 5) {
                     renamedVisible = renamedVisible && table->rowCount() == 1 && table->item(0, 1)->text() == "After rename";
                     stage = 6;
-                    manager->findChild<QPushButton *>("deleteSnapshot")->click();
+                    auto *action = manager->findChild<QPushButton *>("deleteSnapshot");
+                    QTimer::singleShot(0, action, &QPushButton::click);
                 } else if (stage == 7) {
                     stage = 8;
                     manager->accept();
@@ -336,7 +341,7 @@ private slots:
                         auto *restore = manager->findChild<QPushButton *>("restoreSnapshot");
                         enabledForRecovery = restore->isEnabled();
                         stage = 1;
-                        restore->click();
+                        QTimer::singleShot(0, restore, &QPushButton::click);
                     } else manager->accept();
                 } else if (auto *box = qobject_cast<QMessageBox *>(active)) {
                     if (stage == 1 && box->windowTitle() == "Confirm restore") {

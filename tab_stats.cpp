@@ -6,10 +6,7 @@
 #include "positiveintvalidator.h"
 
 #include <QMessageBox>
-#include <QJsonArray>
-#include <QRegularExpression>
 #include <QSignalBlocker>
-#include <QUuid>
 #include <cmath>
 
 enum
@@ -59,19 +56,6 @@ void disableIfCompleted(QCheckBox* cb, int value, int cond)
     }
 }
 
-QJsonObject createNewItem(const QString &guid, int uses = -1, bool isAwake = false, bool isHoovered = false, bool hasSeen = true)
-{
-    QJsonObject newItem;
-    newItem["GUID"]                 = guid;
-    newItem["uses"]                 = uses;
-    newItem["isAwake"]              = isAwake;
-    newItem["isHoovered"]           = isHoovered;
-    newItem["hasSeen"]              = hasSeen;
-    newItem["instanceIDOnCreation"] = QUuid::createUuid().toString(QUuid::WithoutBraces);
-    newItem["newGamePlusCount"]     = 0;
-    return newItem;
-}
-
 Tab_Stats::Tab_Stats(QWidget *parent) :
     QWidget(parent),
     ui(new Ui::Tab_stats)
@@ -105,54 +89,6 @@ Tab_Stats::Tab_Stats(QWidget *parent) :
 
     connect(ui->cb_help,       &QCheckBox::toggled, [this](bool) { setCheat("bossFightAssistances", 0, true); });
 
-    const QList<QString> spells =
-        {
-            "Spell_WepInfusion_StealHealth",
-            "Spell_BombCode",
-            "Spell_ThrowablePixelStorm",
-            "Spell_RecursionDamage",
-            "Spell_KeepMemoryOnDeath",
-            "Spell_SpawnDecoy",
-            "Spell_TrapTarget",
-            "Spell_EscapePath",
-            "Spell_WepInfusion_Glitch",
-            "Spell_StunSurrounding",
-            "Spell_StartingMagicMissile",
-            "Spell_ProjectileDOT",
-            "Spell_HOT",
-            "Spell_SlowPixelBomb",
-            "Spell_LightningChain",
-            "Spell_Thorns",
-            "Throwable_FadedSkuriken"
-        };  
-    const QList<QString> runes =
-        {
-            "Relic_DecreaseProjectileStagger",
-            "Relic_RollIFramesUp",
-            "Relic_StatUp_Strength",
-            "Relic_PoiseUp",
-            "Relic_MemoryDropIncrease",
-            "Relic_CritChanceUp",
-            "Relic_StaminaRegen",
-            "Relic_MagicDefenseUp",
-            "Relic_StatUp_Dex",
-            "Relic_KiteParryBoost",
-            "Relic_SwordParryBoost",
-            "Relic_StatUp_Mag",
-            "Relic_MagicThorns",
-            "Relic_Damage_Abominations",
-            "Relic_Damage_Beasts",
-            "Relic_Damage_Evil",
-            "Relic_Damage_Humanoids",
-            "Relic_HealthRegenOnCrit",
-            "Relic_DecreaseStaminaUsage",
-            "Relic_IncreaseHeroicIconPotency",
-            "Relic_AmmoCapacityUp",
-            "Relic_RecursionDamageUp",
-            "Relic_EquipLoadUp",
-            "Relic_ReduceBuildUp",
-            "Relic_HealthBelowAtkBoost",
-        };
     const QList<QString> armor =
         {
         "SkeletonArmor_Helm",
@@ -223,15 +159,16 @@ Tab_Stats::Tab_Stats(QWidget *parent) :
         "PapersPleaseArmor_Arms"
         };
 
-    connect(ui->cb_all_spell, &QCheckBox::toggled, [this, spells](bool) { all_item_cheat(ui->cb_all_spell, spells, "(Spell|FadedSkuriken)"); });
-    connect(ui->cb_all_rune,  &QCheckBox::toggled, [this, runes ](bool) { all_item_cheat(ui->cb_all_rune,  runes,  "Relic_"); });
-    //TODO: FIND ALL ARMOR AND WEAPON
-    // connect(ui->cb_all_armor, &QCheckBox::toggled, [this, armor ](bool) { all_item_cheat(ui->cb_all_armor, armor,  "(Helm|Torso|Legs|Arms|TopHat)"); });
+    connect(ui->cb_all_spell, &QCheckBox::toggled, [this](bool) {
+        all_item_cheat(ui->cb_all_spell, Inventory::LegacyGroup::Spells);
+    });
+    connect(ui->cb_all_rune, &QCheckBox::toggled, [this](bool) {
+        all_item_cheat(ui->cb_all_rune, Inventory::LegacyGroup::Runes);
+    });
 
-    //TEMP
+    // Catalog-driven actions belong to DIG-124.
     ui->cb_all_weapon->setEnabled(false);
     ui->cb_all_armor->setEnabled(false);
-    //
 
     ui->btn_cheat->setVisible(false);
     ui->line_3->setVisible(false);
@@ -365,35 +302,25 @@ void Tab_Stats::on_btn_cheat_toggled(bool checked)
             w->setVisible(checked);
 }
 
-void Tab_Stats::all_item_cheat(QCheckBox* cb, const QList<QString>& items, const QString& regex)
+void Tab_Stats::all_item_cheat(QCheckBox* cb, Inventory::LegacyGroup group)
 {
     if (isBlockSignal || !isEnabled() || !cb->isChecked() ||
         id < 0 || id >= JsonParser::characters().size()) return;
-    QJsonArray inventory = JsonParser::characters()[id].character["inventory"].toArray();
-    QList<QString> copy = items;
 
-    for(size_t i = 0; i < inventory.size(); ++i)
-        if(const auto& item = inventory[i].toObject()["GUID"].toString(); item.contains(QRegularExpression(regex)))
-            copy.removeOne(item);
-
-    qInfo() << "items: " << copy;
-
-    if(copy.empty())
-    {
-        cb->blockSignals(true);
-        cb->setChecked(true);
-        cb->blockSignals(false);
-        QMessageBox::information(nullptr, QObject::tr("Ты пытался..."), QObject::tr("У вас уже есть эти предметы."));
-        qDebug() << "You already have it all";
-        return;
-    }
-
-    for(const auto& item : copy)
-        inventory.append(createNewItem(item));
-
-    if (!applyMutation([&](SaveCharacter &slot) { slot.character["inventory"] = inventory; })) {
+    QString error;
+    qsizetype added = 0;
+    const bool success = JsonParser::mutateCharacterChecked(id,
+        [&](SaveCharacter &slot, QString &mutationError) {
+            return Inventory::addLegacyMissing(slot, group, added, mutationError);
+        }, error);
+    update();
+    if (!success) {
+        QMessageBox::warning(this, tr("Save not changed"), error);
+    } else if (added == 0) {
         const QSignalBlocker blocker(cb);
-        cb->setChecked(false);
+        cb->setChecked(true);
+        QMessageBox::information(this, QObject::tr("Ты пытался..."),
+                                 QObject::tr("У вас уже есть эти предметы."));
     }
 }
 

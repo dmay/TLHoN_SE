@@ -2,6 +2,7 @@
 #define TAB_STATS_H
 
 #include "jsonparser.h"
+#include "inventorymodel.h"
 
 #include <QWidget>
 
@@ -22,12 +23,12 @@ public:
 
 private slots:
     void on_btn_cheat_toggled(bool checked);
-    void all_item_cheat(class QCheckBox* cb, const QList<QString>& items, const QString& regex);
     // void translate();
     void on_cb_restore_quests_toggled(bool);
 
 private:
     void update();
+    void all_item_cheat(class QCheckBox* cb, Inventory::LegacyGroup group);
     void le_textChanged(QString param, QString text);
     void setCheat(QString param, int value, bool info = false);
     bool applyMutation(const std::function<void(SaveCharacter &)> &mutation);

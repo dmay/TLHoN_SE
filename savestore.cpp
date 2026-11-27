@@ -89,6 +89,14 @@ bool SaveStore::load(QString &error)
 
 bool SaveStore::mutateCharacter(int index, const std::function<void(SaveCharacter &)> &mutation, QString &error)
 {
+    return mutateCharacterChecked(index, [&](SaveCharacter &slot, QString &) {
+        mutation(slot);
+        return true;
+    }, error);
+}
+
+bool SaveStore::mutateCharacterChecked(int index, const CheckedMutation &mutation, QString &error)
+{
     const QString path = savePaths.primary();
     if (!loaded || !current.hasCharacter(index)) {
         error = "No valid selected character. Reload or recover the save first.";
@@ -114,7 +122,11 @@ bool SaveStore::mutateCharacter(int index, const std::function<void(SaveCharacte
         return false;
 
     SaveDocument candidate = current;
-    mutation(candidate.editCharacter(index));
+    error.clear();
+    if (!mutation(candidate.editCharacter(index), error)) {
+        if (error.isEmpty()) error = "Character mutation rejected.";
+        return false;
+    }
     const QByteArray bytes = candidate.serialize();
     // Check the complete envelope before staging any write.
     SaveDocument committed;

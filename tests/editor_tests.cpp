@@ -91,7 +91,7 @@ private slots:
         QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, prefs.path());
         JsonParser::configure(SavePaths(saves.path()));
         const auto paths = JsonParser::paths();
-        const QByteArray baseline = R"({}~SettingsSplit~{"name":"First","memory":11};{};{};opaque;~NoticeMeSenpaiNoticeMe~{"name":"Second","memory":22,"maxIconUses":4,"inventory":[{"GUID":"unrelated"}]};{"bossFightAssistances":3};{"questStage_Main":7};opaque;)";
+        const QByteArray baseline = R"({}~SettingsSplit~{"name":"First","memory":11};{};{};opaque;~NoticeMeSenpaiNoticeMe~{"name":"Second","memory":22,"maxIconUses":4,"inventory":[{"GUID":"unrelated","instanceIDOnCreation":"existing","uses":1,"isAwake":false,"hasSeen":true,"isHoovered":false,"newGamePlusCount":0}],"inventoryWeapons":[]};{"bossFightAssistances":3};{"questStage_Main":7};opaque;)";
         const auto put = [](const QString &path, const QByteArray &bytes) {
             QFile file(path);
             return file.open(QIODevice::WriteOnly) && file.write(bytes) == bytes.size() && file.flush();

@@ -15,6 +15,7 @@ public:
     static const QList<SaveCharacter> &characters();
     static bool canEdit();
     static bool mutateCharacter(int index, const std::function<void(SaveCharacter &)> &mutation, QString &error);
+    static bool mutateCharacterChecked(int index, const SaveStore::CheckedMutation &mutation, QString &error);
 };
 
 #endif

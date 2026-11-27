@@ -9,6 +9,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Core Widgets)
 
+include(CTest)
+add_subdirectory(catalog)
+
 add_library(savecore STATIC
     savepaths.h savepaths.cpp
     backupservice.h backupservice.cpp
@@ -16,8 +19,9 @@ add_library(savecore STATIC
     savedocument.h savedocument.cpp
     savestore.h savestore.cpp
     jsonparser.h jsonparser.cpp
+    inventorymodel.h inventorymodel.cpp
 )
-target_link_libraries(savecore PUBLIC Qt6::Core)
+target_link_libraries(savecore PUBLIC Qt6::Core tlhon_item_catalog)
 target_include_directories(savecore PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 set(EDITOR_SOURCES
@@ -47,9 +51,14 @@ install(TARGETS TLHoN_SE
     BUNDLE DESTINATION .
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
-include(CTest)
 if(BUILD_TESTING)
     find_package(Qt6 REQUIRED COMPONENTS Test)
+    add_executable(inventory_tests tests/inventory_tests.cpp)
+    target_link_libraries(inventory_tests PRIVATE savecore Qt6::Test)
+    target_compile_definitions(inventory_tests PRIVATE FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/Resources/Tests")
+    add_test(NAME inventory_tests COMMAND inventory_tests
+        -o -,txt -o "${CMAKE_CURRENT_BINARY_DIR}/inventory_tests.txt,txt")
+
     add_executable(savecore_tests tests/savecore_tests.cpp)
     target_link_libraries(savecore_tests PRIVATE savecore Qt6::Test)
     target_compile_definitions(savecore_tests PRIVATE FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/Resources/Tests")

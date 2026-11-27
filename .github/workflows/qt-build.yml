@@ -30,7 +30,7 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          foreach ($suite in @("savecore_tests", "backupservice_tests", "restoreservice_tests", "editor_tests")) {
+          foreach ($suite in @("inventory_tests", "savecore_tests", "backupservice_tests", "restoreservice_tests", "editor_tests")) {
             $report = "build/$suite.txt"
             if (!(Test-Path $report)) { throw "Missing QtTest report: $report" }
             Get-Content $report

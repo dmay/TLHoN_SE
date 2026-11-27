@@ -19,6 +19,10 @@ public:
     // atomic write. Use a single callback for related character/info/quest edits.
     bool mutateCharacter(int index, const std::function<void(SaveCharacter &)> &mutation, QString &error);
 
+    // False aborts the detached candidate before serialization or file staging.
+    using CheckedMutation = std::function<bool(SaveCharacter &, QString &)>;
+    bool mutateCharacterChecked(int index, const CheckedMutation &mutation, QString &error);
+
 private:
     SavePaths savePaths;
     SaveDocument current;

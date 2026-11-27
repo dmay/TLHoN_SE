@@ -18,6 +18,8 @@ public:
     void restoreSettings();
     void showSaveStatus(const QString &error);
     void loadGameSaves();
+    // Reusable confirmed restore flow for the Backup Manager (DIG-120).
+    void restoreSnapshot(const QString &id);
     ~Tab_Settings();
 
 private:

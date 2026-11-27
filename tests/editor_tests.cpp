@@ -1,9 +1,12 @@
 #include "jsonparser.h"
 #include "backupservice.h"
+#include "restoreservice.h"
 #include "mainwindow.h"
 #include "tab_settings.h"
 #include "tab_stats.h"
 #include <QCheckBox>
+#include <QComboBox>
+#include <QInputDialog>
 #include <QApplication>
 #include <QAbstractButton>
 #include <QMessageBox>
@@ -124,6 +127,107 @@ private slots:
         QCOMPARE(snapshots.size(), 1);
         QVERIFY(snapshots[0].valid);
     }
+#ifdef Q_OS_WIN
+    void restoreSnapshotFromSettings()
+    {
+        QTemporaryDir saves;
+        QTemporaryDir storage;
+        QTemporaryDir prefs;
+        QVERIFY(saves.isValid() && storage.isValid() && prefs.isValid());
+        QSettings::setDefaultFormat(QSettings::IniFormat);
+        QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, prefs.path());
+        JsonParser::configure(SavePaths(saves.path()));
+        const auto paths = JsonParser::paths();
+        const QByteArray a = "{}~SettingsSplit~"
+            "{\"name\":\"Alice\",\"memory\":11,\"maxIconUses\":3};{};{};opaque;"
+            "~NoticeMeSenpaiNoticeMe~"
+            "{\"name\":\"Bob\",\"memory\":22,\"maxIconUses\":4,\"backstabCount\":20};{};{};opaque;";
+        auto put = [](const QString &path, const QByteArray &bytes) {
+            QFile file(path);
+            return file.open(QIODevice::WriteOnly) && file.write(bytes) == bytes.size() && file.flush();
+        };
+        auto read = [](const QString &path) {
+            QFile file(path);
+            return file.open(QIODevice::ReadOnly) ? file.readAll() : QByteArray();
+        };
+        auto b = a;
+        b.replace("\"memory\":22", "\"memory\":99");
+        b.replace("\"maxIconUses\":4", "\"maxIconUses\":8");
+        b.replace("\"backstabCount\":20", "\"backstabCount\":0");
+        QVERIFY(put(paths.primary(), a));
+        QVERIFY(put(paths.gameBackup(), "A companion"));
+        QString error;
+        QSettings settings("DeathWhisper", "TLHoN_SE");
+        QVERIFY2(BackupService::configureStorageDirectory(settings, paths, storage.path(), error), qPrintable(error));
+        BackupService service(paths, storage.path());
+        BackupSnapshot chosen;
+        QVERIFY2(service.createSnapshot("A", chosen, error), qPrintable(error));
+        QVERIFY(put(paths.primary(), b));
+        QVERIFY(put(paths.gameBackup(), "B companion"));
+        QVERIFY2(JsonParser::init(error), qPrintable(error));
+
+        MainWindow window;
+        auto *tab = window.findChild<Tab_Settings *>();
+        auto *stats = window.findChild<Tab_Stats *>();
+        QVERIFY(tab && stats);
+        auto *selector = tab->findChild<QComboBox *>("cb_saves");
+        auto *icons = tab->findChild<QLineEdit *>("le_maxIconUses");
+        auto *memory = stats->findChild<QLineEdit *>("le_memory");
+        auto *restoreButton = tab->findChild<QPushButton *>("btn_restore");
+        QVERIFY(selector && icons && memory && restoreButton);
+        selector->setCurrentIndex(1);
+        QCOMPARE(memory->text(), QString("99"));
+        QCOMPARE(icons->text(), QString("8"));
+
+        for (const bool confirm : {false, true}) {
+            int stage = 0;
+            bool scopeShown = false;
+            bool successShown = false;
+            QTimer dialogs;
+            connect(&dialogs, &QTimer::timeout, tab, [&] {
+                auto *active = QApplication::activeModalWidget();
+                if (auto *input = qobject_cast<QInputDialog *>(active)) {
+                    if (stage == 1) { stage = 2; input->accept(); }
+                    else input->reject();
+                } else if (auto *box = qobject_cast<QMessageBox *>(active)) {
+                    if (stage == 0) {
+                        for (auto *action : box->buttons()) {
+                            if (action->text() == "Restore snapshot") {
+                                stage = 1;
+                                action->click();
+                                return;
+                            }
+                        }
+                    } else if (stage == 2 && box->windowTitle() == "Confirm restore") {
+                        scopeShown = box->text().contains("ALL characters") &&
+                            box->informativeText().contains(paths.directory());
+                        stage = 3;
+                        box->button(confirm ? QMessageBox::Yes : QMessageBox::No)->click();
+                        return;
+                    } else if (stage == 3) {
+                        successShown = box->windowTitle() == "Restore complete";
+                    }
+                    box->reject();
+                }
+            });
+            dialogs.start(10);
+            restoreButton->click();
+            dialogs.stop();
+            QVERIFY(scopeShown);
+            QCOMPARE(successShown, confirm);
+            QCOMPARE(read(paths.primary()), confirm ? a : b);
+            QCOMPARE(read(paths.gameBackup()), QByteArray(confirm ? "A companion" : "B companion"));
+            QList<BackupSnapshot> snapshots;
+            QVERIFY(service.list(snapshots, error));
+            QCOMPARE(snapshots.size(), confirm ? 2 : 1);
+            QCOMPARE(selector->currentIndex(), 1);
+        }
+        QCOMPARE(memory->text(), QString("22"));
+        QCOMPARE(icons->text(), QString("4"));
+        QCOMPARE(read(paths.primary()), a);
+        QVERIFY(!RestoreService::hasPending(paths));
+    }
+#endif
 };
 
 QTEST_MAIN(EditorTests)

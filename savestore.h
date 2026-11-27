@@ -12,6 +12,7 @@ public:
     const SavePaths &paths() const { return savePaths; }
     const SaveDocument &document() const { return current; }
     bool isLoaded() const { return loaded; }
+    void invalidate() { loaded = false; }
     bool canEdit() const;
     bool load(QString &error);
     // Callback receives a detached candidate, published only after a checked

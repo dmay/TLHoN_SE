@@ -1,4 +1,5 @@
 #include "backupservice.h"
+#include "restoreservice.h"
 
 #include <QCryptographicHash>
 #include <QDir>
@@ -154,7 +155,8 @@ QByteArray encodeManifest(const BackupSnapshot &snapshot)
     }
     const QJsonObject manifest{
         {"version", 1}, {"id", snapshot.id},
-        {"kind", snapshot.kind == BackupKind::Normal ? "normal" : "legacy"},
+        {"kind", snapshot.kind == BackupKind::Legacy ? "legacy" :
+                 snapshot.kind == BackupKind::Safety ? "safety" : "normal"},
         {"createdAt", snapshot.createdAt.toString(Qt::ISODateWithMs)},
         {"label", snapshot.label}, {"sourceDirectory", snapshot.sourceDirectory},
         {"sourceProfile", snapshot.sourceProfile}, {"files", files}};
@@ -180,17 +182,17 @@ bool decodeManifest(const QByteArray &bytes, const QString &id, BackupSnapshot &
         !id.startsWith(created.toUTC().toString(stampFormat) + "-"))
         return fail(error, "Invalid snapshot timestamp.");
     const auto kind = m.value("kind").toString();
-    if (kind != "normal" && kind != "legacy")
+    if (kind != "normal" && kind != "legacy" && kind != "safety")
         return fail(error, "Invalid snapshot kind.");
 
     snapshot.createdAt = created.toUTC();
-    snapshot.kind = kind == "normal" ? BackupKind::Normal : BackupKind::Legacy;
+    snapshot.kind = kind == "legacy" ? BackupKind::Legacy : kind == "safety" ? BackupKind::Safety : BackupKind::Normal;
     snapshot.label = m.value("label").toString();
     snapshot.sourceDirectory = m.value("sourceDirectory").toString();
     snapshot.sourceProfile = m.value("sourceProfile").toString();
 
     const auto files = m.value("files").toArray();
-    const QString first = snapshot.kind == BackupKind::Normal ? primaryName : legacyName;
+    const QString first = snapshot.kind == BackupKind::Legacy ? legacyName : primaryName;
     if (files.size() != 2)
         return fail(error, "Snapshot must describe exactly two file states.");
     for (int i = 0; i < files.size(); ++i) {
@@ -206,9 +208,10 @@ bool decodeManifest(const QByteArray &bytes, const QString &id, BackupSnapshot &
         else if (state == "missing") file.state = BackupFileState::Missing;
         else if (state == "notCaptured") file.state = BackupFileState::NotCaptured;
         else return fail(error, "Invalid snapshot file state.");
-        if ((i == 0 && file.state != BackupFileState::Present) ||
+        if ((i == 0 && (file.state == BackupFileState::NotCaptured ||
+                         (snapshot.kind != BackupKind::Safety && file.state != BackupFileState::Present))) ||
             (i == 1 && snapshot.kind == BackupKind::Legacy && file.state != BackupFileState::NotCaptured) ||
-            (i == 1 && snapshot.kind == BackupKind::Normal && file.state == BackupFileState::NotCaptured))
+            (i == 1 && snapshot.kind != BackupKind::Legacy && file.state == BackupFileState::NotCaptured))
             return fail(error, "Invalid file state for snapshot kind.");
         if (file.state == BackupFileState::Present) {
             bool ok = false;
@@ -287,12 +290,14 @@ bool verifyDirectory(const QString &path, const QString &id, BackupSnapshot &sna
 bool readSource(const SavePaths &paths, BackupKind kind, QMap<QString, QByteArray> &bytes, QString &error)
 {
     bytes.clear();
-    const auto path = kind == BackupKind::Normal ? paths.primary() : paths.legacyEditorBackup();
+    const auto path = kind == BackupKind::Legacy ? paths.legacyEditorBackup() : paths.primary();
     QByteArray content;
-    if (!readRegular(path, content, error))
-        return false;
-    bytes.insert(kind == BackupKind::Normal ? primaryName : legacyName, content);
-    if (kind == BackupKind::Normal && present(paths.gameBackup())) {
+    if (kind != BackupKind::Safety || present(path)) {
+        if (!readRegular(path, content, error))
+            return false;
+        bytes.insert(kind == BackupKind::Legacy ? legacyName : primaryName, content);
+    }
+    if (kind != BackupKind::Legacy && present(paths.gameBackup())) {
         if (!readRegular(paths.gameBackup(), content, error))
             return false;
         bytes.insert(gameBackupName, content);
@@ -371,7 +376,7 @@ bool BackupService::snapshotPath(const QString &id, QString &path, QString &erro
 }
 
 bool BackupService::capture(BackupKind kind, const QString &label, BackupSnapshot &result,
-                             QString &error, const CancelCheck &canceled) const
+                             QString &error, const CancelCheck &canceled, bool sourceLocked) const
 {
     result = {};
     if (canceled && canceled())
@@ -384,8 +389,10 @@ bool BackupService::capture(BackupKind kind, const QString &label, BackupSnapsho
     // Cooperate with SaveStore. The game/Steam do not honor the editor lock;
     // compare the complete pair again just before publishing the snapshot.
     QLockFile sourceLock(paths.primary() + ".editor.lock");
-    if (!sourceLock.tryLock(0))
+    if (!sourceLocked && !sourceLock.tryLock(0))
         return fail(error, "Cannot lock save directory. Close the game and other editor instances, and check permissions.");
+    if (RestoreService::hasPending(paths))
+        return fail(error, "Recover the interrupted restore before creating another snapshot.");
     QMap<QString, QByteArray> captured;
     if (!readSource(paths, kind, captured, error))
         return false;
@@ -397,7 +404,7 @@ bool BackupService::capture(BackupKind kind, const QString &label, BackupSnapsho
     snapshot.label = label;
     snapshot.sourceDirectory = paths.directory();
     snapshot.sourceProfile = qEnvironmentVariable("USERPROFILE", QDir::homePath());
-    for (const auto &name : {kind == BackupKind::Normal ? primaryName : legacyName, gameBackupName}) {
+    for (const auto &name : {kind == BackupKind::Legacy ? legacyName : primaryName, gameBackupName}) {
         BackupFile record;
         record.name = name;
         if (captured.contains(name)) {
@@ -405,7 +412,7 @@ bool BackupService::capture(BackupKind kind, const QString &label, BackupSnapsho
             record.size = captured.value(name).size();
             record.sha256 = hash(captured.value(name));
         } else {
-            record.state = kind == BackupKind::Normal ? BackupFileState::Missing : BackupFileState::NotCaptured;
+            record.state = kind == BackupKind::Legacy ? BackupFileState::NotCaptured : BackupFileState::Missing;
         }
         snapshot.files.append(record);
     }
@@ -507,6 +514,8 @@ bool BackupService::renameLabel(const QString &id, const QString &label, QString
     BackupSnapshot snapshot;
     if (!inspect(id, snapshot, error))
         return false;
+    if (snapshot.kind == BackupKind::Safety)
+        return fail(error, "Automatic safety snapshots are immutable.");
     snapshot.label = label;
     if (!writeAtomic(QDir(path).filePath(manifestName), encodeManifest(snapshot), error))
         return false;
@@ -527,6 +536,13 @@ bool BackupService::deleteSnapshot(const QString &id, bool confirmed, QString &e
     const QStringList allowed{manifestName, primaryName, gameBackupName, legacyName};
     if (!snapshotPath(id, path, error) || !safeContents(path, allowed, error))
         return false;
+    // Protect safety snapshots even if a captured file is damaged.
+    QByteArray manifest;
+    BackupSnapshot snapshot;
+    QString diagnostic;
+    if (readRegular(QDir(path).filePath(manifestName), manifest, diagnostic) &&
+        decodeManifest(manifest, id, snapshot, diagnostic) && snapshot.kind == BackupKind::Safety)
+        return fail(error, "Automatic safety snapshots are immutable.");
     // Never recursively delete arbitrary contents. Unpublish the selected
     // directory first so a partial cleanup cannot look like a usable backup.
     const auto tombstone = ".deleted-" + QUuid::createUuid().toString(QUuid::WithoutBraces);

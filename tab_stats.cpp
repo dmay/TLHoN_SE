@@ -128,6 +128,7 @@ void Tab_Stats::initInventory(Tab_Inventory *inventory)
     connect(ui->btn_all_armor, &QPushButton::clicked, inventory, &Tab_Inventory::addAllArmor);
     connect(ui->btn_all_weapon, &QPushButton::clicked, inventory, &Tab_Inventory::addAllWeapons);
     connect(inventory, &Tab_Inventory::inventoryChanged, this, &Tab_Stats::update);
+    connect(this, &Tab_Stats::legacyInventoryChanged, inventory, &Tab_Inventory::refresh);
 }
 
 void Tab_Stats::le_textChanged(QString param, QString text)
@@ -261,6 +262,8 @@ void Tab_Stats::all_item_cheat(QCheckBox* cb, Inventory::LegacyGroup group)
         cb->setChecked(true);
         QMessageBox::information(this, QObject::tr("Ты пытался..."),
                                  QObject::tr("У вас уже есть эти предметы."));
+    } else {
+        emit legacyInventoryChanged();
     }
 }
 

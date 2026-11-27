@@ -25,10 +25,14 @@ public:
 
 private:
     void refreshEditingAvailability();
+    bool allowSaveContextChange();
     void    saveSettings(const QString &key, const QString &value);
     QString loadSettings(const QString &key);
 
 signals:
+    // Synchronous veto before a user-selected character change or reload/restore.
+    // Listeners may only set *allowed to false; use direct connections.
+    void saveContextChanging(bool *allowed);
     void characterChanged();
     void modeToggled(bool);
     void saveRestored();

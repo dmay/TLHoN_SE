@@ -956,5 +956,177 @@ Existing items and equipment are unchanged. Close the game, finish Steam synchro
         <source>Добавлено предметов: %1.</source>
         <translation>Items added: %1.</translation>
     </message>
+    <message>
+        <source>Мои предметы</source>
+        <translation>Owned items</translation>
+    </message>
+    <message>
+        <source>Добавить предметы</source>
+        <translation>Add items</translation>
+    </message>
+    <message>
+        <source>Название, GUID или ID</source>
+        <translation>Name, GUID or ID</translation>
+    </message>
+    <message>
+        <source>Массив</source>
+        <translation>Array</translation>
+    </message>
+    <message>
+        <source>ID экземпляра</source>
+        <translation>Instance ID</translation>
+    </message>
+    <message>
+        <source>Состояние</source>
+        <translation>State</translation>
+    </message>
+    <message>
+        <source>Копий</source>
+        <translation>Copies</translation>
+    </message>
+    <message>
+        <source>Поле</source>
+        <translation>Field</translation>
+    </message>
+    <message>
+        <source>Сохранено</source>
+        <translation>Saved</translation>
+    </message>
+    <message>
+        <source>Предлагается</source>
+        <translation>Proposed</translation>
+    </message>
+    <message>
+        <source>Доступ / причина</source>
+        <translation>Access / reason</translation>
+    </message>
+    <message>
+        <source>Допустимое состояние:</source>
+        <translation>Allowed state:</translation>
+    </message>
+    <message>
+        <source>Применить</source>
+        <translation>Apply</translation>
+    </message>
+    <message>
+        <source>Отмена</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
+        <source>Все массивы</source>
+        <translation>All arrays</translation>
+    </message>
+    <message>
+        <source>Все состояния</source>
+        <translation>All states</translation>
+    </message>
+    <message>
+        <source>Просмотрен</source>
+        <translation>Seen</translation>
+    </message>
+    <message>
+        <source>Не просмотрен</source>
+        <translation>Unseen</translation>
+    </message>
+    <message>
+        <source>Пробуждён</source>
+        <translation>Awake</translation>
+    </message>
+    <message>
+        <source>Освобождён</source>
+        <translation>Unburdened</translation>
+    </message>
+    <message>
+        <source>Не удалось прочитать инвентарь: %1</source>
+        <translation>Cannot read inventory: %1</translation>
+    </message>
+    <message>
+        <source>Инвентарь пуст.</source>
+        <translation>Inventory is empty.</translation>
+    </message>
+    <message>
+        <source>Показано: %1 из %2 экземпляров.</source>
+        <translation>Showing %1 of %2 instances.</translation>
+    </message>
+    <message>
+        <source>Несохранённые изменения</source>
+        <translation>Unsaved changes</translation>
+    </message>
+    <message>
+        <source>Отменить неподтверждённые изменения экземпляра? Сохранение не будет изменено.</source>
+        <translation>Discard pending instance changes? The save will not be modified.</translation>
+    </message>
+    <message>
+        <source>Невозможно выбрать экземпляр: %1</source>
+        <translation>Cannot select instance: %1</translation>
+    </message>
+    <message>
+        <source>Экземпляр или персонаж изменился. Выберите предмет снова.</source>
+        <translation>Instance or character changed. Select an item again.</translation>
+    </message>
+    <message>
+        <source>Допустимые состояния изменились. Несохранённые изменения отменены.</source>
+        <translation>Allowed states changed. Pending changes were discarded.</translation>
+    </message>
+    <message>
+        <source>%1 — %2; ID: %3</source>
+        <translation>%1 — %2; ID: %3</translation>
+    </message>
+    <message>
+        <source>да</source>
+        <translation>yes</translation>
+    </message>
+    <message>
+        <source>нет</source>
+        <translation>no</translation>
+    </message>
+    <message>
+        <source>uses: %1; hasSeen: %2</source>
+        <translation>uses: %1; hasSeen: %2</translation>
+    </message>
+    <message>
+        <source>level: %1; infusionType: %2; hasSeen: %3</source>
+        <translation>level: %1; infusionType: %2; hasSeen: %3</translation>
+    </message>
+    <message>
+        <source>Выберите экземпляр для просмотра свойств.</source>
+        <translation>Select an instance to view its properties.</translation>
+    </message>
+    <message>
+        <source>Идентификатор (только чтение)</source>
+        <translation>Identity (read-only)</translation>
+    </message>
+    <message>
+        <source>Неподдерживаемое поле (только чтение)</source>
+        <translation>Unsupported field (read-only)</translation>
+    </message>
+    <message>
+        <source>Допустимое состояние</source>
+        <translation>Allowed state</translation>
+    </message>
+    <message>
+        <source>Только чтение: %1</source>
+        <translation>Read-only: %1</translation>
+    </message>
+    <message>
+        <source>Изменения не сохранены. Примените или отмените.</source>
+        <translation>Unsaved changes. Apply or cancel.</translation>
+    </message>
+    <message>
+        <source>Данные тестовых сохранений, не проверено в игре: %1</source>
+        <translation>Fixture evidence, not game-qualified: %1</translation>
+    </message>
+    <message>
+        <source>Нет других допустимых состояний.</source>
+        <translation>No alternative allowed states.</translation>
+    </message>
+    <message>
+        <source>Сохранение не изменено: %1</source>
+        <translation>Save not changed: %1</translation>
+    </message>
+    <message>
+        <source>Изменения сохранены.</source>
+        <translation>Changes saved.</translation>
+    </message>
 </context>
 </TS>

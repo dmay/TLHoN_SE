@@ -7,6 +7,9 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QHeaderView>
+#include <QJsonDocument>
+#include <QHash>
+#include <QBrush>
 #include <QMessageBox>
 #include <QSignalBlocker>
 #include <QShowEvent>
@@ -56,7 +59,29 @@ Tab_Inventory::Tab_Inventory(QWidget *parent) : QWidget(parent), ui(new Ui::Tab_
     ui->setupUi(this);
     // The main window uses a dark background. Use ordinary, readable controls
     // within the existing pane instead of the old image placeholder.
-    setStyleSheet("QLabel, QCheckBox { color: white; font: 12px sans-serif; }");
+    setStyleSheet("QLabel, QCheckBox { color: white; font: 12px sans-serif; }"
+                  "QWidget#ownedPage, QWidget#catalogPage { background: #282828; }");
+    for (auto *table : {ui->ownedTable, ui->propertyTable}) {
+        table->verticalHeader()->hide();
+        table->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
+        table->horizontalHeader()->setStretchLastSection(true);
+    }
+    ui->ownedTable->setColumnWidth(0, 185);
+    ui->ownedTable->setColumnWidth(1, 115);
+    ui->ownedTable->setColumnWidth(2, 155);
+    ui->ownedTable->setColumnWidth(3, 100);
+    ui->propertyTable->setColumnWidth(0, 140);
+    ui->propertyTable->setColumnWidth(1, 145);
+    ui->propertyTable->setColumnWidth(2, 125);
+    ui->ownedSplitter->setStretchFactor(0, 1);
+    ui->ownedSplitter->setStretchFactor(1, 1);
+    connect(ui->ownedSearch, &QLineEdit::textChanged, this, &Tab_Inventory::renderOwnedRows);
+    for (auto *filter : {ui->arrayFilter, ui->ownedCategoryFilter, ui->stateFilter})
+        connect(filter, &QComboBox::currentIndexChanged, this, &Tab_Inventory::renderOwnedRows);
+    connect(ui->ownedTable, &QTableWidget::itemSelectionChanged, this, &Tab_Inventory::selectOwned);
+    connect(ui->propertyState, &QComboBox::currentIndexChanged, this, &Tab_Inventory::updatePropertyPreview);
+    connect(ui->applyProperties, &QPushButton::clicked, this, &Tab_Inventory::applySelectedProperties);
+    connect(ui->cancelProperties, &QPushButton::clicked, this, &Tab_Inventory::cancelSelectedProperties);
     auto *header = ui->catalogTable->horizontalHeader();
     header->setSectionResizeMode(0, QHeaderView::Stretch);
     for (int i = 1; i < header->count(); ++i)
@@ -80,6 +105,9 @@ Tab_Inventory::~Tab_Inventory() { delete ui; }
 
 void Tab_Inventory::initSettings(Tab_Settings *settings)
 {
+    connect(settings, &Tab_Settings::saveContextChanging, this, [this](bool *allowed) {
+        if (*allowed && !confirmDiscardDraft()) *allowed = false;
+    }, Qt::DirectConnection);
     connect(settings, &Tab_Settings::characterChanged, this, [this] { ++revision; refresh(); });
     connect(settings, &Tab_Settings::saveRestored, this, [this] { ++revision; refresh(); });
     connect(settings, &Tab_Settings::editingAvailabilityChanged, this, &Tab_Inventory::refresh);
@@ -103,6 +131,19 @@ void Tab_Inventory::retranslate()
     for (const auto category : {Category::Armor, Category::Weapon, Category::Shield})
         ui->categoryFilter->addItem(categoryText(category), int(category));
     ui->categoryFilter->setCurrentIndex(filter);
+
+    const auto populate = [](QComboBox *box, const QStringList &labels) {
+        const int previous = qMax(0, box->currentIndex());
+        const QSignalBlocker keep(box);
+        box->clear();
+        box->addItems(labels);
+        box->setCurrentIndex(previous);
+    };
+    populate(ui->arrayFilter, {tr("Все массивы"), "inventory", "inventoryWeapons"});
+    populate(ui->ownedCategoryFilter, {tr("Все категории"), categoryText(Category::Armor),
+        categoryText(Category::Weapon), categoryText(Category::Shield), categoryText(Category::Other)});
+    populate(ui->stateFilter, {tr("Все состояния"), tr("Просмотрен"), tr("Не просмотрен"),
+        tr("Пробуждён"), tr("Освобождён")});
     refresh();
 }
 
@@ -191,6 +232,8 @@ void Tab_Inventory::refresh()
     }
     ui->catalogStatus->setToolTip(source.catalogPath + "\n" + reviewPath + "\nSHA-256: " + catalog.sha256);
     renderRows();
+    refreshProperties();
+    renderOwnedRows();
 }
 
 int Tab_Inventory::owned(const Entry &entry) const
@@ -365,4 +408,281 @@ void Tab_Inventory::grant(const QList<Category> &categories, const QString &guid
     refresh();
     emit inventoryChanged();
     QMessageBox::information(window(), tr("Предметы добавлены"), tr("Добавлено предметов: %1.").arg(added));
+}
+
+namespace {
+QString jsonText(const QJsonValue &value)
+{
+    const auto encoded = QJsonDocument(QJsonArray{value}).toJson(QJsonDocument::Compact);
+    return QString::fromUtf8(encoded.mid(1, encoded.size() - 2));
+}
+
+QString instanceKey(Inventory::ArrayKind kind, const QString &id)
+{
+    return Inventory::arrayKey(kind) + ":" + id;
+}
+}
+
+QString Tab_Inventory::displayName(const Inventory::Instance &item) const
+{
+    const auto *entry = catalogLoaded ? catalog.find(item.guid) : nullptr;
+    return entry && !entry->displayName.isEmpty() ? entry->displayName : item.guid;
+}
+
+void Tab_Inventory::renderOwnedRows()
+{
+    const QSignalBlocker blocker(ui->ownedTable);
+    ui->ownedTable->clearContents();
+    ui->ownedTable->setRowCount(0);
+    QHash<QString, int> copies;
+    for (const auto &item : instances) ++copies[instanceKey(item.kind, item.guid)];
+    const QString query = ui->ownedSearch->text().trimmed();
+    const int arrayFilter = ui->arrayFilter->currentIndex();
+    const int categoryFilter = ui->ownedCategoryFilter->currentIndex();
+    const int stateFilter = ui->stateFilter->currentIndex();
+    const QList<Category> categories{Category::Other, Category::Armor, Category::Weapon, Category::Shield, Category::Other};
+
+    for (const auto &item : instances) {
+        const auto *entry = catalogLoaded ? catalog.find(item.guid) : nullptr;
+        const Category category = entry ? entry->category : Category::Other;
+        if (arrayFilter > 0 && arrayFilter != (item.kind == Inventory::ArrayKind::Generic ? 1 : 2)) continue;
+        if (categoryFilter > 0 && category != categories.at(categoryFilter)) continue;
+        const bool seen = item.fields.value("hasSeen").toBool();
+        const bool awake = item.fields.value("isAwake").toBool();
+        const bool hoovered = item.fields.value("isHoovered").toBool();
+        if ((stateFilter == 1 && !seen) || (stateFilter == 2 && seen) ||
+            (stateFilter == 3 && !awake) || (stateFilter == 4 && !hoovered)) continue;
+        const auto name = displayName(item);
+        if (!name.contains(query, Qt::CaseInsensitive) && !item.guid.contains(query, Qt::CaseInsensitive) &&
+            !item.instanceId.contains(query, Qt::CaseInsensitive)) continue;
+        QStringList state{seen ? tr("Просмотрен") : tr("Не просмотрен")};
+        if (awake) state.append(tr("Пробуждён"));
+        if (hoovered) state.append(tr("Освобождён"));
+        const QStringList values{name, Inventory::arrayKey(item.kind), item.instanceId,
+            state.join(", "), QString::number(copies.value(instanceKey(item.kind, item.guid)))};
+        const int row = ui->ownedTable->rowCount();
+        ui->ownedTable->insertRow(row);
+        for (int column = 0; column < values.size(); ++column) {
+            auto *cell = new QTableWidgetItem(values.at(column));
+            cell->setToolTip(item.guid + "\n" + categoryText(category) + "\n" + item.instanceId + "\n" + state.join(", "));
+            if (column == 0) {
+                cell->setData(Qt::UserRole, item.instanceId);
+                cell->setData(Qt::UserRole + 1, int(item.kind));
+            }
+            ui->ownedTable->setItem(row, column, cell);
+        }
+        if (propertySelection.slotIndex == slotIndex && propertySelection.item.kind == item.kind &&
+            propertySelection.item.instanceId == item.instanceId)
+            ui->ownedTable->selectRow(row);
+    }
+    ui->ownedStatus->setText(slotIndex < 0 ? tr("Выберите персонажа в настройках.") :
+        !inventoryError.isEmpty() ? tr("Не удалось прочитать инвентарь: %1").arg(inventoryError) :
+        instances.isEmpty() ? tr("Инвентарь пуст.") :
+        tr("Показано: %1 из %2 экземпляров.").arg(ui->ownedTable->rowCount()).arg(instances.size()));
+}
+
+QVariantMap Tab_Inventory::originalState() const
+{
+    if (propertySelection.slotIndex < 0) return {};
+    const auto fields = propertySelection.item.fields;
+    QVariantMap state{{"hasSeen", fields.value("hasSeen").toBool()}};
+    if (propertySelection.item.kind == Inventory::ArrayKind::Generic)
+        state.insert("uses", fields.value("uses").toInt());
+    else {
+        state.insert("level", fields.value("level").toInt());
+        state.insert("infusionType", fields.value("infusionType").toInt());
+    }
+    return state;
+}
+
+bool Tab_Inventory::hasDraft() const
+{
+    return propertySelection.slotIndex >= 0 &&
+        ui->propertyState->currentIndex() >= 0 &&
+        ui->propertyState->currentData().toMap() != originalState();
+}
+
+bool Tab_Inventory::confirmDiscardDraft()
+{
+    if (!hasDraft()) return true;
+    QMessageBox box(QMessageBox::Question, tr("Несохранённые изменения"),
+        tr("Отменить неподтверждённые изменения экземпляра? Сохранение не будет изменено."),
+        QMessageBox::Yes | QMessageBox::No, window());
+    box.setDefaultButton(QMessageBox::No);
+    if (box.exec() != QMessageBox::Yes) return false;
+    cancelSelectedProperties();
+    return true;
+}
+
+void Tab_Inventory::selectOwned()
+{
+    const auto rows = ui->ownedTable->selectionModel()->selectedRows();
+    if (rows.size() != 1) return;
+    const auto *cell = ui->ownedTable->item(rows.first().row(), 0);
+    if (!cell) return;
+    // Copy identity before any modal dialog allows the UI to refresh.
+    const auto instanceId = cell->data(Qt::UserRole).toString();
+    const auto kind = Inventory::ArrayKind(cell->data(Qt::UserRole + 1).toInt());
+    const int requestedSlot = slotIndex;
+    const auto requestedRevision = revision;
+    if (propertySelection.slotIndex == slotIndex && propertySelection.item.kind == kind &&
+        propertySelection.item.instanceId == instanceId) return;
+    if (!confirmDiscardDraft()) { renderOwnedRows(); return; }
+    QString error;
+    propertySelection = {};
+    if (requestedRevision != revision || requestedSlot != Tab_Settings::getCharacterId() ||
+        !Inventory::selectProperties(JsonParser::characters(), requestedSlot, kind, instanceId, propertySelection, error)) {
+        renderProperties();
+        ui->propertyStatus->setText(tr("Невозможно выбрать экземпляр: %1").arg(error));
+        return;
+    }
+    renderProperties();
+}
+
+void Tab_Inventory::refreshProperties()
+{
+    const auto pending = hasDraft() ? ui->propertyState->currentData().toMap() : QVariantMap{};
+    if (propertySelection.slotIndex >= 0) {
+        Inventory::PropertySelection current;
+        QString error;
+        // Never silently rebase a draft onto a different or changed record.
+        if (propertySelection.slotIndex != slotIndex ||
+            !Inventory::selectProperties(JsonParser::characters(), slotIndex, propertySelection.item.kind,
+                propertySelection.item.instanceId, current, error) ||
+            current.characterGuid != propertySelection.characterGuid ||
+            current.item.fields != propertySelection.item.fields) {
+            propertySelection = {};
+            renderProperties();
+            ui->propertyStatus->setText(tr("Экземпляр или персонаж изменился. Выберите предмет снова."));
+            return;
+        }
+    }
+    renderProperties(pending);
+    if (!pending.isEmpty() && !hasDraft())
+        ui->propertyStatus->setText(tr("Допустимые состояния изменились. Несохранённые изменения отменены."));
+}
+
+QString Tab_Inventory::propertyEditBlocker() const
+{
+    if (propertySelection.slotIndex < 0) return {};
+    if (!JsonParser::canEdit()) return tr("Редактирование недоступно. Закройте игру, завершите синхронизацию Steam и перезагрузите или восстановите сохранение в настройках.");
+    return propertyOptions.readOnlyReason;
+}
+
+void Tab_Inventory::renderProperties(const QVariantMap &pending)
+{
+    const QSignalBlocker blocker(ui->propertyState);
+    ui->propertyState->clear();
+    propertyOptions = {};
+    if (propertySelection.slotIndex >= 0) {
+        const auto &item = propertySelection.item;
+        propertyOptions = Inventory::propertyOptions(JsonParser::characters().at(slotIndex), item);
+        ui->selectedInstance->setText(tr("%1 — %2; ID: %3").arg(displayName(item), Inventory::arrayKey(item.kind), item.instanceId));
+        const auto seenText = [](bool seen) { return seen ? Tab_Inventory::tr("да") : Tab_Inventory::tr("нет"); };
+        // All selectable choices are typed, complete service-approved tuples.
+        // This avoids offering an invalid Cartesian product of field ranges.
+        for (const auto &state : propertyOptions.genericStates)
+            ui->propertyState->addItem(tr("uses: %1; hasSeen: %2").arg(state.uses).arg(seenText(state.hasSeen)),
+                QVariantMap{{"uses", state.uses}, {"hasSeen", state.hasSeen}});
+        for (const auto &state : propertyOptions.weaponStates)
+            ui->propertyState->addItem(tr("level: %1; infusionType: %2; hasSeen: %3").arg(state.level).arg(state.infusionType).arg(seenText(state.hasSeen)),
+                QVariantMap{{"level", state.level}, {"infusionType", state.infusionType}, {"hasSeen", state.hasSeen}});
+        const auto wanted = pending.isEmpty() ? originalState() : pending;
+        int baseline = -1, target = -1;
+        for (int i = 0; i < ui->propertyState->count(); ++i) {
+            const auto map = ui->propertyState->itemData(i).toMap();
+            if (map == originalState()) baseline = i;
+            if (map == wanted) target = i;
+        }
+        ui->propertyState->setCurrentIndex(target >= 0 ? target : baseline);
+    } else {
+        ui->selectedInstance->setText(tr("Выберите экземпляр для просмотра свойств."));
+    }
+    updatePropertyPreview();
+}
+
+void Tab_Inventory::updatePropertyPreview()
+{
+    const QSignalBlocker blocker(ui->propertyTable);
+    ui->propertyTable->setRowCount(0);
+    ui->propertyTable->clearContents();
+    const auto blocked = propertyEditBlocker();
+    const bool selected = propertySelection.slotIndex >= 0;
+    const bool alternatives = selected && ui->propertyState->count() > 1 && blocked.isEmpty();
+    ui->propertyState->setEnabled(alternatives);
+    ui->applyProperties->setEnabled(alternatives && hasDraft());
+    ui->cancelProperties->setEnabled(hasDraft());
+    if (!selected) {
+        ui->propertyStatus->clear();
+        return;
+    }
+    const auto fields = propertySelection.item.fields;
+    const auto proposed = ui->propertyState->currentData().toMap();
+    const auto fieldReason = [&](const QString &key) -> QString {
+        if (key == "GUID" || key == "instanceIDOnCreation") return tr("Идентификатор (только чтение)");
+        if (key == "isAwake" || key == "isHoovered") return propertyOptions.flagsReadOnlyReason;
+        if (key == "newGamePlusCount") return propertyOptions.ngPlusReadOnlyReason;
+        if (key == "uses") return propertyOptions.usesReadOnlyReason;
+        if (key == "hasSeen") return propertyOptions.hasSeenReadOnlyReason;
+        if (key == "level") return propertyOptions.levelReadOnlyReason;
+        if (key == "infusionType") return propertyOptions.infusionReadOnlyReason;
+        return tr("Неподдерживаемое поле (только чтение)");
+    };
+    // Always show the complete saved record, even unknown nested values.
+    // Every detail cell is read-only; only the tuple selector can stage changes.
+    for (auto it = fields.constBegin(); it != fields.constEnd(); ++it) {
+        const int row = ui->propertyTable->rowCount();
+        ui->propertyTable->insertRow(row);
+        const QString before = jsonText(it.value());
+        const QString after = proposed.contains(it.key()) ?
+            jsonText(QJsonValue::fromVariant(proposed.value(it.key()))) : before;
+        const auto reason = fieldReason(it.key());
+        const QStringList values{it.key(), before, after,
+            reason.isEmpty() && blocked.isEmpty() ? tr("Допустимое состояние") :
+            tr("Только чтение: %1").arg(reason.isEmpty() ? blocked : reason)};
+        for (int col = 0; col < values.size(); ++col) {
+            auto *cell = new QTableWidgetItem(values.at(col));
+            cell->setToolTip(values.at(col));
+            cell->setFlags(cell->flags().setFlag(Qt::ItemIsEditable, false));
+            if (col == 2 && before != after) cell->setBackground(QBrush(QColor("#fff0b3")));
+            ui->propertyTable->setItem(row, col, cell);
+        }
+    }
+    if (!blocked.isEmpty()) ui->propertyStatus->setText(blocked);
+    else if (hasDraft()) ui->propertyStatus->setText(tr("Изменения не сохранены. Примените или отмените."));
+    else if (alternatives) ui->propertyStatus->setText(tr("Данные тестовых сохранений, не проверено в игре: %1").arg(propertyOptions.evidence));
+    else ui->propertyStatus->setText(tr("Нет других допустимых состояний."));
+}
+
+void Tab_Inventory::cancelSelectedProperties()
+{
+    renderProperties();
+}
+
+void Tab_Inventory::applySelectedProperties()
+{
+    if (!hasDraft()) return;
+    const auto state = ui->propertyState->currentData().toMap();
+    Inventory::PropertyEdits edits;
+    if (state.contains("uses")) edits.uses = state.value("uses").toInt();
+    if (state.contains("level")) edits.level = state.value("level").toInt();
+    if (state.contains("infusionType")) edits.infusionType = state.value("infusionType").toInt();
+    if (state.contains("hasSeen")) edits.hasSeen = state.value("hasSeen").toBool();
+    const auto selected = propertySelection;
+    QString error;
+    // The service checks the captured complete state, live selected slot,
+    // exact record and on-disk bytes again before performing one commit.
+    if (!Inventory::applyProperties(Tab_Settings::getCharacterId(), selected, edits, error)) {
+        refresh();
+        ui->propertyStatus->setText(tr("Сохранение не изменено: %1").arg(error));
+        return;
+    }
+    if (!Inventory::selectProperties(JsonParser::characters(), Tab_Settings::getCharacterId(),
+            selected.item.kind, selected.item.instanceId, propertySelection, error))
+        propertySelection = {};
+    // The old draft is now committed. Do not reapply it on the new selection.
+    renderProperties();
+    refresh();
+    emit inventoryChanged();
+    ui->propertyStatus->setText(tr("Изменения сохранены."));
 }

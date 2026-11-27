@@ -1,12 +1,13 @@
 #ifndef TAB_INVENTORY_H
 #define TAB_INVENTORY_H
 
-#include "inventorymodel.h"
+#include "inventoryproperties.h"
+#include <QVariantMap>
 #include <QWidget>
 
 namespace Ui { class Tab_Inventory; }
 
-// Catalog grants only. Per-instance browser/property edits belong to DIG-127.
+// Catalog grants and owned-instance browser share the protected inventory facade.
 class Tab_Inventory : public QWidget
 {
     Q_OBJECT
@@ -18,6 +19,7 @@ public:
     bool loadCatalog(const ItemCatalog::Source &source, const QString &reviewPath = {});
     void addAllArmor();
     void addAllWeapons();
+    void refresh();
 
 signals:
     void inventoryChanged();
@@ -26,8 +28,19 @@ protected:
     void showEvent(QShowEvent *event) override;
 
 private:
-    void refresh();
     void renderRows();
+    void renderOwnedRows();
+    void refreshProperties();
+    void renderProperties(const QVariantMap &pending = {});
+    void updatePropertyPreview();
+    void selectOwned();
+    void applySelectedProperties();
+    void cancelSelectedProperties();
+    bool confirmDiscardDraft();
+    bool hasDraft() const;
+    QVariantMap originalState() const;
+    QString displayName(const Inventory::Instance &item) const;
+    QString propertyEditBlocker() const;
     void updateSelection();
     void retranslate();
     void chooseCatalog();
@@ -49,6 +62,8 @@ private:
     bool catalogLoaded = false;
     QList<Inventory::Instance> instances;
     QString inventoryError;
+    Inventory::PropertySelection propertySelection;
+    Inventory::PropertyOptions propertyOptions;
     int slotIndex = -1;
     quint64 revision = 0; // invalidate a preview on character/restore or grant configuration change
 };

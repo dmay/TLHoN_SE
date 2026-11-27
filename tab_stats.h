@@ -22,6 +22,9 @@ public:
     void initInventory(class Tab_Inventory *inventory);
     ~Tab_Stats();
 
+signals:
+    void legacyInventoryChanged();
+
 private slots:
     void on_btn_cheat_toggled(bool checked);
     // void translate();

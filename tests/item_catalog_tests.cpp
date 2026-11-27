@@ -85,7 +85,12 @@ int main(int argc, char *argv[])
     CHECK(catalog.find("AvatarBaseSword")->type == "Swords");
     CHECK(catalog.find("AvatarBaseShield")->category == Category::Shield);
     CHECK(catalog.find("DemoNestedShield")->category == Category::Shield);
+    CHECK(catalog.find("Starting_Knight_Helm")->dlc == Dlc::Unknown);
+    CHECK(catalog.find("DemoDlcArmor")->category == Category::Armor);
     CHECK(catalog.find("DemoDlcArmor")->dlc == Dlc::DlcPath);
+    CHECK(catalog.find("DemoDlcArmor")->reason == "dlc-entitlement-unverified");
+    CHECK(catalog.find("DemoDlcArmor")->availability == Availability::Unresolved);
+    CHECK(catalog.find("DemoDlcArmor")->sourcePaths.first().contains("/Armour/DLCArmours/"));
     CHECK(catalog.find("HealthPotion")->category == Category::Other);
     CHECK(catalog.find("BaseSword")->reason == "base-type-path");
     CHECK(catalog.find("BaseSword")->availability == Availability::Excluded);
@@ -99,6 +104,7 @@ int main(int argc, char *argv[])
     CHECK(catalog.bulkEligible(Category::Shield, true).isEmpty());
     CHECK(catalog.report().value("uniqueGuidCount").toInt() == 14);
     CHECK(catalog.report().value("reasonCounts").toObject().value("ambiguous-guid").toInt() == 1);
+    CHECK(catalog.report().value("reasonCounts").toObject().value("dlc-entitlement-unverified").toInt() == 1);
 
     const Catalog original = catalog;
     QJsonObject special = reviewRow(*catalog.find("WelcomeArmour_TopHat"), "base", "helm");
@@ -134,6 +140,22 @@ int main(int argc, char *argv[])
     CHECK(!catalog.find("AvatarBaseSword")->typeVerified);
     CHECK(!catalog.find("DemoDlcArmor")->bulkEligible());
     CHECK(catalog.find("DemoDlcArmor")->bulkEligible(true));
+
+    // A nested DLC path must reject a base-game review even when every other
+    // field is valid. Use a single validly-shaped row to isolate the DLC check
+    // (not an accidental rejection for a duplicate review).
+    auto falseBaseReview = review;
+    falseBaseReview.insert("entries", QJsonArray{reviewRow(*original.find("DemoDlcArmor"), "base", "torso")});
+    CHECK(writeReview(falseBaseReview));
+    CHECK(!load(source, catalog, error, reviewPath) && catalog.entries.isEmpty() && !error.isEmpty());
+
+    // Preserve the original supported root DLCArmours layout as well.
+    const QString rootDlcCatalog = root + "/root-dlc.json";
+    CHECK(write(rootDlcCatalog, QByteArray(bytes).replace("Items/Armour/DLCArmours/", "Items/DLCArmours/")));
+    CHECK(load({rootDlcCatalog, {}}, catalog, error));
+    CHECK(catalog.find("DemoDlcArmor")->category == Category::Armor);
+    CHECK(catalog.find("DemoDlcArmor")->dlc == Dlc::DlcPath);
+    CHECK(catalog.find("DemoDlcArmor")->reason == "dlc-entitlement-unverified");
 
     // Invalid reviews must fail atomically rather than silently enabling a subset.
     const auto rejectRow = [&](const QJsonObject &row) {

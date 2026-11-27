@@ -93,7 +93,8 @@ ownership detection, and UI selection are separate work.
 Only paths rooted exactly at `Assets/Design/GameplayData/Items/` with a
 case-sensitive `.asset` extension are considered. Materials, textures,
 prefabs and bundle addresses with other extensions are ignored. Candidate
-paths classified as armor include `Armour`, `DLCArmours`, and
+paths classified as armor include `Armour` (including the observed nested
+`Armour/DLCArmours` and `Armour/StartingArmors` layouts), `DLCArmours`, and
 `StartingArmors`; `Weapons` and its subfolders distinguish weapon types;
 `Shields` (including under `Weapons`) is separate. Unknown top-level
 categories remain indexed as other, with no bulk eligibility.
@@ -103,8 +104,10 @@ referenced asset's runtime type. `BaseTypes` and known non-definition
 folders (`Textures`, `Materials`, `Prefabs`, `Icons`) are conservatively
 excluded, conflicting paths with the same GUID are quarantined, and
 placeholder/prototype name hints are flagged unresolved. DLC path hints
-are not ownership checks. The existence of a .asset, its filename, inventory
-observations or the historical hardcoded list cannot automatically grant it.
+match exact folder components (including nested `DLCArmours`) and reject
+base-game allow-list entries; they are not ownership checks. The existence
+of a .asset, its filename, inventory observations or the historical
+hardcoded list cannot automatically grant it.
 
 ## Reviewed allow-list
 
@@ -184,13 +187,14 @@ slots in the second SaveData.txt character resolve to MasterChefArmor
 definitions through their instance IDs. This is fixture evidence, not
 live-game behavior.
 
-The issue records prior installation observations of 2,759 internal IDs,
-356 candidate definitions, 92 Armour + 20 DLCArmours + 20 StartingArmors,
-and 25/25 inventory GUID matches. That installation is not available in
-the implementation environment; these counts are **not independently
-reproduced**. Obtain a report from the authorized installation using the
-command above, verify exact fixture matches and actual paths/counts, and
-review candidate exclusions, DLC ownership/obtainability, slot/type and
-names against that version. Any unresolved records stay ineligible.
+The installed-catalog qualification findings are recorded in DIG-117.
+A separate read-only inspection on the authorized Windows machine
+independently reproduced extraction and fixture matching against the real
+catalog, and identified the nested DLC armor path corrected here. That
+inspection was a Python reproduction of the classifier/comparison logic,
+not a run of the native Qt tool. Use the command above to produce a native
+report for the installed version and review candidate exclusions, DLC
+ownership/obtainability, slot/type and names against that version. Any
+unresolved records stay ineligible.
 A live verified allow-list and disposable-profile round-trip have not been
 established by synthetic tests; do not enable bulk add on this basis.

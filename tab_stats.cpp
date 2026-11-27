@@ -46,6 +46,7 @@ QString getClass(int c)
 
 void disableIfCompleted(QCheckBox* cb, int value, int cond)
 {
+    const QSignalBlocker blocker(cb);
     if(value >= cond)
     {
         cb->setChecked(true);
@@ -248,18 +249,20 @@ void Tab_Stats::initSettings(Tab_Settings *s)
     connect(s, &Tab_Settings::characterChanged, this, &Tab_Stats::update);
     connect(s, &Tab_Settings::modeToggled, ui->btn_cheat, &QPushButton::setVisible);
     connect(s, &Tab_Settings::saveRestored, this, &Tab_Stats::update);
+    connect(s, &Tab_Settings::editingAvailabilityChanged, this, &Tab_Stats::update);
     connect(s, &Tab_Settings::languageChanged, [this](){ui->retranslateUi(this); });
 }
 
 void Tab_Stats::le_textChanged(QString param, QString text)
 {
-    if (isBlockSignal || id < 0) return;
+    if (isBlockSignal || !isEnabled() || id < 0 || id >= JsonParser::characters().size()) return;
+    if (text.toInt() == JsonParser::characters()[id].character[param].toInt()) return;
     applyMutation([&](SaveCharacter &slot) { slot.character[param] = text.toInt(); });
 }
 
 void Tab_Stats::setCheat(QString param, int value, bool info)
 {
-    if (isBlockSignal || id < 0) return;
+    if (isBlockSignal || !isEnabled() || id < 0 || id >= JsonParser::characters().size()) return;
     if (!applyMutation([&](SaveCharacter &slot) {
         (info ? slot.info : slot.character)[param] = value;
     }) && info) {
@@ -285,8 +288,27 @@ void Tab_Stats::update()
     isBlockSignal = true;
     const bool selected = id >= 0 && id < characters.size();
     setEnabled(selected && JsonParser::canEdit());
+    // One-shot action controls are not a live model of the save. Reset them
+    // after a character change or restore instead of displaying stale checks.
+    for (auto *box : {ui->cb_all_spell, ui->cb_all_rune, ui->cb_all_armor, ui->cb_all_weapon,
+                      ui->cb_restore_quests, ui->cb_help}) {
+        const QSignalBlocker blocker(box);
+        box->setChecked(false);
+    }
     if (!selected) {
         ui->l_nickname->setText(tr("No character"));
+        for (auto *line : findChildren<QLineEdit *>()) {
+            const QSignalBlocker blocker(line);
+            line->clear();
+        }
+        for (auto *label : {ui->l_class, ui->l_level, ui->l_health, ui->l_stamina, ui->l_required,
+                             ui->l_faded, ui->l_remembered, ui->l_unburdened, ui->l_DLC})
+            label->clear();
+        for (auto *box : {ui->cb_backstabs, ui->cb_repostes, ui->cb_rebuffs,
+                          ui->cb_remembered, ui->cb_unburdened, ui->cb_DLC}) {
+            const QSignalBlocker blocker(box);
+            box->setChecked(false);
+        }
         isBlockSignal = false;
         return;
     }
@@ -345,7 +367,7 @@ void Tab_Stats::on_btn_cheat_toggled(bool checked)
 
 void Tab_Stats::all_item_cheat(QCheckBox* cb, const QList<QString>& items, const QString& regex)
 {
-    if (isBlockSignal || !cb->isChecked() ||
+    if (isBlockSignal || !isEnabled() || !cb->isChecked() ||
         id < 0 || id >= JsonParser::characters().size()) return;
     QJsonArray inventory = JsonParser::characters()[id].character["inventory"].toArray();
     QList<QString> copy = items;
@@ -377,7 +399,7 @@ void Tab_Stats::all_item_cheat(QCheckBox* cb, const QList<QString>& items, const
 
 void Tab_Stats::on_cb_restore_quests_toggled(bool checked)
 {
-    if (!checked || isBlockSignal || id < 0) return;
+    if (!checked || isBlockSignal || !isEnabled() || id < 0 || id >= JsonParser::characters().size()) return;
     if (!applyMutation([](SaveCharacter &slot) {
         for (const auto *key : {"questStage_BrendenMerkle", "questStage_ChainedHero",
                 "questStage_Heir", "questStage_Hoover", "questStage_Innocent",

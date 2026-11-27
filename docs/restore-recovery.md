@@ -4,8 +4,9 @@
 
 1. Exit The Last Hero of Nostalgaia. Wait for Steam Cloud to finish syncing;
    do not start the game or run a second editor during restoration.
-2. Open Settings → Backup / recovery → Restore snapshot. Choose a verified
-   snapshot (or first import the old editor's `SaveData.txt_bckp`).
+2. Open Settings → [Backup Manager](backup-manager.md). Choose a verified,
+   parseable snapshot and Restore selected (or first import the old editor's
+   `SaveData.txt_bckp`).
 3. Review the source, target, snapshot ID, exact file states, sizes and
    checksums (Show Details). Confirm only if these are the intended files.
    A full snapshot replaces the entire save/all characters. If its game

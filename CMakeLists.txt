@@ -26,6 +26,7 @@ set(EDITOR_SOURCES
     tab_stats.cpp tab_stats.h tab_stats.ui
     tab_equipment.cpp tab_equipment.h tab_equipment.ui
     tab_settings.cpp tab_settings.h tab_settings.ui
+    backupmanager.cpp backupmanager.h
     tab_about.cpp tab_about.h tab_about.ui
     positiveintvalidator.cpp positiveintvalidator.h
     resource.qrc

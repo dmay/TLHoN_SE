@@ -377,15 +377,30 @@ private slots:
         // A disposable test-only executable has the installed game's basename.
         // The real game is never launched or terminated by these tests.
         QVERIFY2(RestoreService::gameClosed(error), qPrintable(error));
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const SavePaths paths(dir.path());
+        const QByteArray original = R"({}~SettingsSplit~{"name":"Guard","memory":10};{};{};opaque;)";
+        QVERIFY(put(paths.primary(), original));
+        SaveStore store(paths);
+        QVERIFY2(store.load(error), qPrintable(error));
         QProcess child;
         child.start(QDir(QCoreApplication::applicationDirPath()).filePath("TLHON.exe"), QStringList{});
         QVERIFY(child.waitForStarted());
         const bool blocked = !RestoreService::gameClosed(error);
         const bool stillRunning = child.state() == QProcess::Running;
+        const bool canEdit = store.canEdit();
+        QString editError;
+        const bool mutated = store.mutateCharacter(0, [](SaveCharacter &slot) {
+            slot.character["memory"] = 999;
+        }, editError);
         child.kill();
         QVERIFY(child.waitForFinished());
         QVERIFY(blocked);
         QVERIFY(stillRunning);
+        QVERIFY(!canEdit && !mutated);
+        QCOMPARE(read(paths.primary()), original);
+        QVERIFY(editError.contains("TLHON.exe"));
         QVERIFY(error.contains("TLHON.exe"));
         QVERIFY2(RestoreService::gameClosed(error), qPrintable(error));
     }

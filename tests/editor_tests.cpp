@@ -1,5 +1,6 @@
 #include "jsonparser.h"
 #include "backupservice.h"
+#include "backupmanager.h"
 #include "restoreservice.h"
 #include "mainwindow.h"
 #include "tab_settings.h"
@@ -11,6 +12,10 @@
 #include <QAbstractButton>
 #include <QMessageBox>
 #include <QTimer>
+#include <QTableWidget>
+#include <QPlainTextEdit>
+#include <QLabel>
+#include <QProcess>
 #include <QFile>
 #include <QDir>
 #include <QLineEdit>
@@ -75,6 +80,93 @@ private slots:
         QVERIFY(!QFile::exists(JsonParser::paths().legacyEditorBackup()));
     }
 
+    void stubbedCatalog()
+    {
+        class Stub final : public BackupManagerBackend
+        {
+        public:
+            bool closed = true;
+            bool valid = true;
+            bool pending = false;
+            bool listFails = false;
+            bool createFails = true;
+            int restoreCalls = 0;
+            int removeCalls = 0;
+            QString storageDirectory() const override { return "backups"; }
+            QString saveDirectory() const override { return "saves"; }
+            bool list(QList<BackupCatalogEntry> &entries, QString &error) override {
+                if (listFails) { error = "test storage error"; return false; }
+                BackupSnapshot normal;
+                normal.id = "normal"; normal.valid = true; normal.label = "Named";
+                BackupSnapshot corrupt = normal;
+                corrupt.id = "corrupt"; corrupt.valid = false;
+                BackupSnapshot safety = normal;
+                safety.id = "safety"; safety.kind = BackupKind::Safety;
+                entries = {{normal, true, {}}, {corrupt, false, "checksum mismatch"},
+                           {safety, false, "missing primary"}};
+                return true;
+            }
+            bool activeValid(QString &error) override { error = valid ? QString() : "bad active"; return valid; }
+            bool gameClosed(QString &error) override { error = closed ? QString() : "running"; return closed; }
+            bool pendingRecovery() const override { return pending; }
+            bool legacyAvailable() const override { return true; }
+            bool create(const QString &, bool, BackupSnapshot &, QString &error) override {
+                error = "test capture failure"; return !createFails;
+            }
+            bool rename(const QString &, const QString &, QString &) override { return true; }
+            bool remove(const QString &, QString &) override { ++removeCalls; return true; }
+            bool chooseStorage(const QString &, QString &) override { return true; }
+            QString restore(const QString &, QWidget *) override { ++restoreCalls; return "test restore"; }
+            QString reload() override { return "test reload"; }
+        } stub;
+        BackupManager manager(stub);
+        auto *table = manager.findChild<QTableWidget *>("snapshotTable");
+        auto *create = manager.findChild<QPushButton *>("createBackup");
+        auto *restore = manager.findChild<QPushButton *>("restoreSnapshot");
+        auto *remove = manager.findChild<QPushButton *>("deleteSnapshot");
+        auto *rename = manager.findChild<QPushButton *>("editLabel");
+        auto *refresh = manager.findChild<QPushButton *>("refreshBackups");
+        auto *details = manager.findChild<QPlainTextEdit *>("snapshotDetails");
+        auto *status = manager.findChild<QLabel *>("backupStatus");
+        QVERIFY(table && create && restore && remove && rename && refresh && details && status);
+        QCOMPARE(table->rowCount(), 3);
+        table->selectRow(1);
+        QVERIFY(!restore->isEnabled() && !rename->isEnabled() && !remove->isEnabled());
+        QVERIFY(details->toPlainText().contains("checksum mismatch"));
+        table->selectRow(2);
+        QVERIFY(!restore->isEnabled() && !rename->isEnabled() && !remove->isEnabled());
+        table->selectRow(0);
+        QVERIFY(restore->isEnabled() && create->isEnabled() && rename->isEnabled() && remove->isEnabled());
+        QTimer::singleShot(0, &manager, [] {
+            auto *box = qobject_cast<QMessageBox *>(QApplication::activeModalWidget());
+            if (box) box->button(QMessageBox::No)->click();
+        });
+        remove->click();
+        QCOMPARE(stub.removeCalls, 0);
+        QTimer::singleShot(0, &manager, [] {
+            auto *input = qobject_cast<QInputDialog *>(QApplication::activeModalWidget());
+            if (input) input->accept();
+        });
+        create->click();
+        QVERIFY(status->text().contains("test capture failure"));
+        stub.closed = false;
+        QTRY_VERIFY(!create->isEnabled() && !restore->isEnabled() && !remove->isEnabled());
+        stub.closed = true;
+        stub.valid = false;
+        refresh->click();
+        QVERIFY(!create->isEnabled() && !remove->isEnabled() && restore->isEnabled());
+        restore->click();
+        QCOMPARE(stub.restoreCalls, 1);
+        stub.pending = true;
+        refresh->click();
+        QVERIFY(!restore->isEnabled());
+        stub.listFails = true;
+        refresh->click();
+        QVERIFY(status->text().contains("test storage error"));
+        QCOMPARE(table->rowCount(), 0);
+    }
+
+#ifdef Q_OS_WIN
     void createSnapshotFromSettings()
     {
         QTemporaryDir saves;
@@ -91,43 +183,72 @@ private slots:
         QVERIFY2(JsonParser::init(error), qPrintable(error));
         QSettings settings("DeathWhisper", "TLHoN_SE");
         QVERIFY2(BackupService::configureStorageDirectory(settings, paths, storage.path(), error), qPrintable(error));
-
         Tab_Settings tab;
+        tab.restoreSettings();
         auto *button = tab.findChild<QPushButton *>("btn_restore");
         QVERIFY(button);
-        bool actionClicked = false;
-        bool successShown = false;
-        // Drive the same button a user clicks, without launching the game or
-        // touching a real save directory. Reject unknown dialogs to avoid hangs.
+        QCOMPARE(button->text(), QString("Backup Manager"));
+        int stage = 0;
+        bool namedVisible = false;
+        bool renamedVisible = false;
         QTimer dialogs;
         connect(&dialogs, &QTimer::timeout, &tab, [&] {
-            auto *box = qobject_cast<QMessageBox *>(QApplication::activeModalWidget());
-            if (!box) return;
-            if (!actionClicked) {
-                for (auto *action : box->buttons()) {
-                    if (action->text() == "Create backup") {
-                        actionClicked = true;
-                        action->click();
-                        return;
-                    }
-                }
-            } else {
-                successShown = box->windowTitle() == "Backup created";
+            auto *active = QApplication::activeModalWidget();
+            if (auto *manager = qobject_cast<BackupManager *>(active)) {
+                auto *table = manager->findChild<QTableWidget *>("snapshotTable");
+                if (stage == 0) {
+                    stage = 1;
+                    manager->findChild<QPushButton *>("createBackup")->click();
+                } else if (stage == 2) {
+                    namedVisible = table->rowCount() == 1 && table->item(0, 1)->text() == "Before boss";
+                    stage = 3;
+                    manager->findChild<QPushButton *>("editLabel")->click();
+                } else if (stage == 4) {
+                    renamedVisible = table->rowCount() == 1 && table->item(0, 1)->text() == "After rename";
+                    stage = 5;
+                    manager->accept();
+                } else if (stage == 5) {
+                    renamedVisible = renamedVisible && table->rowCount() == 1 && table->item(0, 1)->text() == "After rename";
+                    stage = 6;
+                    manager->findChild<QPushButton *>("deleteSnapshot")->click();
+                } else if (stage == 7) {
+                    stage = 8;
+                    manager->accept();
+                } else { manager->reject(); }
+            } else if (auto *input = qobject_cast<QInputDialog *>(active)) {
+                if (stage == 1 || stage == 3) {
+                    input->setTextValue(stage == 1 ? "Before boss" : "After rename");
+                    ++stage;
+                    input->accept();
+                } else input->reject();
+            } else if (auto *box = qobject_cast<QMessageBox *>(active)) {
+                if (stage == 6) {
+                    stage = 7;
+                    box->button(QMessageBox::Yes)->click();
+                } else box->reject();
             }
-            box->accept();
         });
-        dialogs.start(10);
+        dialogs.start(20);
         button->click();
         dialogs.stop();
-        QVERIFY(actionClicked);
-        QVERIFY(successShown);
+        QCOMPARE(stage, 5);
+        QVERIFY(namedVisible && renamedVisible);
         BackupService service(paths, storage.path());
         QList<BackupSnapshot> snapshots;
         QVERIFY2(service.list(snapshots, error), qPrintable(error));
         QCOMPARE(snapshots.size(), 1);
+        QCOMPARE(snapshots[0].label, QString("After rename"));
         QVERIFY(snapshots[0].valid);
+        // A newly opened manager reads the persisted catalog.
+        dialogs.start(20);
+        button->click();
+        dialogs.stop();
+        QCOMPARE(stage, 8);
+        QVERIFY(renamedVisible);
+        QVERIFY(service.list(snapshots, error));
+        QVERIFY(snapshots.isEmpty());
+        QVERIFY(QFile::exists(paths.primary()) && QFile::exists(paths.gameBackup()));
     }
-#ifdef Q_OS_WIN
     void restoreSnapshotFromSettings()
     {
         QTemporaryDir saves;
@@ -179,49 +300,64 @@ private slots:
         QCOMPARE(memory->text(), QString("99"));
         QCOMPARE(icons->text(), QString("8"));
 
-        for (const bool confirm : {false, true}) {
+        for (int phase = 0; phase < 4; ++phase) {
+            const bool confirm = phase != 0;
+            // A missing/corrupt active save must still allow a valid restore.
+            if (phase == 2) {
+                QVERIFY(QFile::remove(paths.primary()));
+                tab->reloadSave();
+                QCOMPARE(selector->count(), 0);
+                QVERIFY(!memory->isEnabled());
+                QVERIFY(memory->text().isEmpty());
+            }
+            if (phase == 3) {
+                QVERIFY(put(paths.primary(), "corrupt"));
+                tab->reloadSave();
+                QCOMPARE(selector->count(), 0);
+            }
             int stage = 0;
             bool scopeShown = false;
             bool successShown = false;
+            bool enabledForRecovery = false;
             QTimer dialogs;
             connect(&dialogs, &QTimer::timeout, tab, [&] {
                 auto *active = QApplication::activeModalWidget();
-                if (auto *input = qobject_cast<QInputDialog *>(active)) {
-                    if (stage == 1) { stage = 2; input->accept(); }
-                    else input->reject();
-                } else if (auto *box = qobject_cast<QMessageBox *>(active)) {
+                if (auto *manager = qobject_cast<BackupManager *>(active)) {
                     if (stage == 0) {
-                        for (auto *action : box->buttons()) {
-                            if (action->text() == "Restore snapshot") {
-                                stage = 1;
-                                action->click();
-                                return;
-                            }
-                        }
-                    } else if (stage == 2 && box->windowTitle() == "Confirm restore") {
+                        auto *table = manager->findChild<QTableWidget *>("snapshotTable");
+                        for (int row = 0; row < table->rowCount(); ++row)
+                            if (table->item(row, 1)->text() == "A") table->selectRow(row);
+                        auto *restore = manager->findChild<QPushButton *>("restoreSnapshot");
+                        enabledForRecovery = restore->isEnabled();
+                        stage = 1;
+                        restore->click();
+                    } else manager->accept();
+                } else if (auto *box = qobject_cast<QMessageBox *>(active)) {
+                    if (stage == 1 && box->windowTitle() == "Confirm restore") {
                         scopeShown = box->text().contains("ALL characters") &&
                             box->informativeText().contains(paths.directory());
-                        stage = 3;
+                        stage = 2;
                         box->button(confirm ? QMessageBox::Yes : QMessageBox::No)->click();
-                        return;
-                    } else if (stage == 3) {
+                    } else {
                         successShown = box->windowTitle() == "Restore complete";
+                        box->accept();
                     }
-                    box->reject();
                 }
             });
-            dialogs.start(10);
+            dialogs.start(20);
             restoreButton->click();
             dialogs.stop();
+            QVERIFY(enabledForRecovery);
             QVERIFY(scopeShown);
             QCOMPARE(successShown, confirm);
             QCOMPARE(read(paths.primary()), confirm ? a : b);
             QCOMPARE(read(paths.gameBackup()), QByteArray(confirm ? "A companion" : "B companion"));
             QList<BackupSnapshot> snapshots;
             QVERIFY(service.list(snapshots, error));
-            QCOMPARE(snapshots.size(), confirm ? 2 : 1);
-            QCOMPARE(selector->currentIndex(), 1);
+            QCOMPARE(snapshots.size(), phase + 1);
+            QCOMPARE(selector->currentIndex(), phase >= 2 ? 0 : 1);
         }
+        selector->setCurrentIndex(1);
         QCOMPARE(memory->text(), QString("22"));
         QCOMPARE(icons->text(), QString("4"));
         QCOMPARE(read(paths.primary()), a);

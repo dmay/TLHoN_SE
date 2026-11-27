@@ -246,8 +246,8 @@
     <message>
         <location filename="../tab_settings.ui" line="181"/>
         <location filename="../build/Desktop_Qt_6_8_0_MinGW_64_bit-Release/TLHoN_SE_autogen/include/ui_tab_settings.h" line="141"/>
-        <source>Восстановить данные</source>
-        <translation>Restore data</translation>
+        <source>Менеджер резервных копий</source>
+        <translation>Backup Manager</translation>
     </message>
 </context>
 <context>
@@ -425,6 +425,264 @@
         <location filename="../build/Desktop_Qt_6_8_0_MinGW_64_bit-Release/TLHoN_SE_autogen/include/ui_tab_stats.h" line="666"/>
         <source>Вам никто не помогал в убийстве боссов ;)</source>
         <translation>No one helped you kill the bosses ;)</translation>
+    </message>
+</context>
+
+<context>
+    <name>BackupManager</name>
+    <message>
+        <source>Менеджер резервных копий</source>
+        <translation>Backup Manager</translation>
+    </message>
+    <message>
+        <source>Закройте игру и дождитесь завершения синхронизации Steam Cloud. Копии содержат всё сохранение, а не только выбранного персонажа.</source>
+        <translation>Close the game and finish Steam Cloud synchronization before changing saves. Snapshots contain the entire save, not just the selected character.</translation>
+    </message>
+    <message>
+        <source>Выбрать папку копий</source>
+        <translation>Choose backup folder</translation>
+    </message>
+    <message>
+        <source>Открыть папку копий</source>
+        <translation>Open backup folder</translation>
+    </message>
+    <message>
+        <source>Открыть папку сохранений</source>
+        <translation>Open save folder</translation>
+    </message>
+    <message>
+        <source>Перезагрузить сохранение</source>
+        <translation>Reload save</translation>
+    </message>
+    <message>
+        <source>Обновить список</source>
+        <translation>Refresh list</translation>
+    </message>
+    <message>
+        <source>Создано (местное время)</source>
+        <translation>Created (local)</translation>
+    </message>
+    <message>
+        <source>Название</source>
+        <translation>Label</translation>
+    </message>
+    <message>
+        <source>Тип</source>
+        <translation>Type</translation>
+    </message>
+    <message>
+        <source>Файлы / проверка</source>
+        <translation>Files / validity</translation>
+    </message>
+    <message>
+        <source>Байты</source>
+        <translation>Bytes</translation>
+    </message>
+    <message>
+        <source>Источник</source>
+        <translation>Source</translation>
+    </message>
+    <message>
+        <source>Создать копию</source>
+        <translation>Create backup</translation>
+    </message>
+    <message>
+        <source>Импорт старой копии</source>
+        <translation>Import legacy backup</translation>
+    </message>
+    <message>
+        <source>Изменить название</source>
+        <translation>Edit label</translation>
+    </message>
+    <message>
+        <source>Удалить выбранную</source>
+        <translation>Delete selected</translation>
+    </message>
+    <message>
+        <source>Восстановить выбранную</source>
+        <translation>Restore selected</translation>
+    </message>
+    <message>
+        <source>Закрыть</source>
+        <translation>Close</translation>
+    </message>
+    <message>
+        <source>Папка сохранений: %1
+Папка копий: %2</source>
+        <translation>Save folder: %1
+Backup storage: %2</translation>
+    </message>
+    <message>
+        <source>Не удалось получить список копий: %1</source>
+        <translation>Cannot list snapshots: %1</translation>
+    </message>
+    <message>
+        <source>Неизвестно</source>
+        <translation>Unknown</translation>
+    </message>
+    <message>
+        <source>Автоматическая страховочная</source>
+        <translation>Automatic safety</translation>
+    </message>
+    <message>
+        <source>Старая (только основной файл)</source>
+        <translation>Legacy (primary only)</translation>
+    </message>
+    <message>
+        <source>Полное сохранение</source>
+        <translation>Full save</translation>
+    </message>
+    <message>
+        <source>Нарушена целостность</source>
+        <translation>Invalid integrity</translation>
+    </message>
+    <message>
+        <source>Нельзя восстановить</source>
+        <translation>Not restorable</translation>
+    </message>
+    <message>
+        <source>Проверена / читается</source>
+        <translation>Verified / parseable</translation>
+    </message>
+    <message>
+        <source>(Без названия)</source>
+        <translation>(Unnamed)</translation>
+    </message>
+    <message>
+        <source>%1 / %2 — %3</source>
+        <translation>%1 / %2 — %3</translation>
+    </message>
+    <message>
+        <source>Выберите копию для просмотра файлов. Возможно, в этой папке пока нет копий.</source>
+        <translation>Select a snapshot to inspect its files. No snapshots may exist in this folder yet.</translation>
+    </message>
+    <message>
+        <source>Копия: %1
+Источник: %2
+Профиль: %3</source>
+        <translation>Snapshot: %1
+Source: %2
+Profile: %3</translation>
+    </message>
+    <message>
+        <source>Есть — %1 байт; SHA-256 %2</source>
+        <translation>Present — %1 bytes; SHA-256 %2</translation>
+    </message>
+    <message>
+        <source>Отсутствует</source>
+        <translation>Missing</translation>
+    </message>
+    <message>
+        <source>Не скопирован</source>
+        <translation>Not captured</translation>
+    </message>
+    <message>
+        <source>Автоматические страховочные копии нельзя переименовать или удалить.</source>
+        <translation>Automatic safety snapshots cannot be renamed or deleted.</translation>
+    </message>
+    <message>
+        <source>Восстановление прервано: перезагрузите сохранение для попытки восстановления.</source>
+        <translation>Interrupted restore: reload the save to attempt recovery before changing snapshots.</translation>
+    </message>
+    <message>
+        <source>Сохранение отсутствует или повреждено. Восстановите или импортируйте старую копию. %1</source>
+        <translation>Active save invalid or missing. Restore or import a legacy backup to recover. %1</translation>
+    </message>
+    <message>
+        <source>Папка копий недоступна. Выберите другую папку или обновите список.</source>
+        <translation>Backup storage unavailable. Choose another folder or refresh.</translation>
+    </message>
+    <message>
+        <source>Игра закрыта. Выберите проверенную копию или создайте новую.</source>
+        <translation>Game closed. Select a verified snapshot or create a new backup.</translation>
+    </message>
+    <message>
+        <source>Восстановление прервано: сначала перезагрузите сохранение.</source>
+        <translation>Interrupted restore: reload the save first.</translation>
+    </message>
+    <message>
+        <source>Сохранение повреждено: %1</source>
+        <translation>Active save invalid: %1</translation>
+    </message>
+    <message>
+        <source>Название (необязательно)</source>
+        <translation>Label (optional)</translation>
+    </message>
+    <message>
+        <source>Старая копия редактора</source>
+        <translation>Legacy editor backup</translation>
+    </message>
+    <message>
+        <source>Копирование отменено.</source>
+        <translation>Backup canceled.</translation>
+    </message>
+    <message>
+        <source>Создание и проверка копии…</source>
+        <translation>Creating and verifying snapshot…</translation>
+    </message>
+    <message>
+        <source>Копия создана и проверена: %1</source>
+        <translation>Snapshot created and verified: %1</translation>
+    </message>
+    <message>
+        <source>Копия не создана: %1</source>
+        <translation>Backup not created: %1</translation>
+    </message>
+    <message>
+        <source>Изменение названия отменено.</source>
+        <translation>Label change canceled.</translation>
+    </message>
+    <message>
+        <source>Название изменено: %1</source>
+        <translation>Label updated: %1</translation>
+    </message>
+    <message>
+        <source>Название не изменено: %1</source>
+        <translation>Label not changed: %1</translation>
+    </message>
+    <message>
+        <source>Удалить копию</source>
+        <translation>Delete snapshot</translation>
+    </message>
+    <message>
+        <source>Удалить только эту копию безвозвратно? Сохранение и другие копии не будут изменены.</source>
+        <translation>Permanently delete only this snapshot? The active save and other backups will not be changed.</translation>
+    </message>
+    <message>
+        <source>Удаление отменено.</source>
+        <translation>Deletion canceled.</translation>
+    </message>
+    <message>
+        <source>Копия удалена: %1</source>
+        <translation>Snapshot deleted: %1</translation>
+    </message>
+    <message>
+        <source>Удаление не завершено: %1</source>
+        <translation>Deletion not completed: %1</translation>
+    </message>
+    <message>
+        <source>Подготовка восстановления…</source>
+        <translation>Preparing restore…</translation>
+    </message>
+    <message>
+        <source>Выбрать хранилище копий</source>
+        <translation>Choose backup storage</translation>
+    </message>
+    <message>
+        <source>Папка копий не изменена: %1</source>
+        <translation>Backup folder unchanged: %1</translation>
+    </message>
+    <message>
+        <source>Выбрана другая папка копий. Существующие копии не перемещены.</source>
+        <translation>Switched backup catalog. Existing snapshots were not moved.</translation>
+    </message>
+    <message>
+        <source>Не удалось открыть папку: %1</source>
+        <translation>Could not open directory: %1</translation>
+    </message>
+    <message>
+        <source>В копии нет основного файла сохранения.</source>
+        <translation>Snapshot has no primary save.</translation>
     </message>
 </context>
 </TS>

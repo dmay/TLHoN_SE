@@ -19,10 +19,12 @@ public:
     void showSaveStatus(const QString &error);
     void loadGameSaves();
     // Reusable confirmed restore flow for the Backup Manager (DIG-120).
-    void restoreSnapshot(const QString &id);
+    QString restoreSnapshot(const QString &id, QWidget *parent = nullptr);
+    QString reloadSave();
     ~Tab_Settings();
 
 private:
+    void refreshEditingAvailability();
     void    saveSettings(const QString &key, const QString &value);
     QString loadSettings(const QString &key);
 
@@ -30,6 +32,7 @@ signals:
     void characterChanged();
     void modeToggled(bool);
     void saveRestored();
+    void editingAvailabilityChanged();
     void languageChanged();
 
 private slots:
@@ -43,6 +46,7 @@ private:
     Ui::Tab_Settings *ui;
     QTranslator translator;
     QString saveStatus;
+    bool editingAvailable = false;
     static QString language;
     static int characterId;
     class PositiveIntValidator* validator;

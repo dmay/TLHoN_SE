@@ -3,18 +3,15 @@
 
 #include "jsonparser.h"
 #include "backupservice.h"
+#include "backupmanager.h"
 #include "restoreservice.h"
 #include "stylefromfile.h"
 #include "positiveintvalidator.h"
 
-#include <QDesktopServices>
-#include <QFileDialog>
-#include <QFileInfo>
 #include <QMessageBox>
-#include <QInputDialog>
 #include <QStringList>
 #include <QSignalBlocker>
-#include <QUrl>
+#include <QTimer>
 #include <QSettings>
 
 
@@ -31,7 +28,11 @@ Tab_Settings::Tab_Settings(QWidget *parent)
     ui->le_maxIconUses->setValidator(validator);
 
     setStyleFromFile(this, ":/Resources/StyleSheets/Tab_Settings.qss");
+    ui->l_saveStatus->setTextFormat(Qt::PlainText);
     loadGameSaves();
+    auto *timer = new QTimer(this);
+    connect(timer, &QTimer::timeout, this, &Tab_Settings::refreshEditingAvailability);
+    timer->start(1000);
 }
 
 void Tab_Settings::loadGameSaves()
@@ -56,7 +57,7 @@ int Tab_Settings::getCharacterId()
 
 void Tab_Settings::restoreSettings()
 {
-    int language_index = loadSettings("language").toInt();
+    int language_index = loadSettings("Language").toInt();
     //Load language
     on_cb_language_currentIndexChanged(language_index);
 
@@ -79,7 +80,7 @@ void Tab_Settings::on_cb_saves_currentIndexChanged(int index)
     const auto &characters = JsonParser::characters();
     characterId = index >= 0 && index < characters.size() ? index : -1;
     const QSignalBlocker blocker(ui->le_maxIconUses);
-    ui->le_maxIconUses->setEnabled(characterId >= 0 && JsonParser::canEdit());
+    refreshEditingAvailability();
     ui->le_maxIconUses->setText(characterId >= 0
         ? QString::number(characters[characterId].character["maxIconUses"].toInt())
         : QString());
@@ -92,95 +93,56 @@ void Tab_Settings::showSaveStatus(const QString &error)
     if (status.isEmpty() && JsonParser::characters().isEmpty())
         status = tr("No characters found. Editing is disabled.");
     saveStatus = status;
+    refreshEditingAvailability();
+}
+
+void Tab_Settings::refreshEditingAvailability()
+{
+    const QSignalBlocker blocker(ui->le_maxIconUses);
+    QString gameError;
+#ifdef Q_OS_WIN
+    RestoreService::gameClosed(gameError);
+#endif
+    const bool enabled = characterId >= 0 && JsonParser::canEdit() && gameError.isEmpty();
+    ui->le_maxIconUses->setEnabled(enabled);
+    QString status = saveStatus;
+    if (!gameError.isEmpty())
+        status += (status.isEmpty() ? QString() : "\n") + gameError;
+    else if (!enabled && status.isEmpty())
+        status = tr("Editing disabled. Reload or recover the save.");
     ui->l_saveStatus->setText(status);
     ui->l_saveStatus->setVisible(!status.isEmpty());
+    if (enabled != editingAvailable) {
+        editingAvailable = enabled;
+        emit editingAvailabilityChanged();
+    }
 }
 
 void Tab_Settings::on_btn_restore_clicked()
 {
-    // DIG-120 will replace this entry point with the full catalog UI.
-    QSettings settings("DeathWhisper", "TLHoN_SE");
-    BackupService backups(JsonParser::paths(), BackupService::configuredStorageDirectory(settings));
-    QMessageBox dialog(QMessageBox::Information, tr("Backup / recovery"),
-        tr("Close the game before creating or recovering backups. Snapshots copy the complete save, "
-           "not just the selected character. Finish Steam Cloud synchronization before restoring.") +
-        "\n\n" + tr("Save folder: %1").arg(JsonParser::paths().directory()) +
-        "\n" + tr("Backup storage: %1").arg(backups.storageDirectory()),
-        QMessageBox::Close, this);
-    const bool pending = RestoreService::hasPending(JsonParser::paths());
-    auto *restore = dialog.addButton(tr("Restore snapshot"), QMessageBox::ActionRole);
-    restore->setEnabled(!pending);
-    auto *create = dialog.addButton(tr("Create backup"), QMessageBox::ActionRole);
-    create->setEnabled(!pending);
-    auto *choose = dialog.addButton(tr("Choose backup folder"), QMessageBox::ActionRole);
-    auto *legacy = dialog.addButton(tr("Import legacy backup"), QMessageBox::ActionRole);
-    legacy->setEnabled(!pending && QFileInfo::exists(JsonParser::paths().legacyEditorBackup()));
-    auto *open = dialog.addButton(tr("Open save folder"), QMessageBox::ActionRole);
-    auto *reload = dialog.addButton(tr("Reload save"), QMessageBox::ActionRole);
-    dialog.exec();
-    if (dialog.clickedButton() == choose) {
-        const QString directory = QFileDialog::getExistingDirectory(this, tr("Choose backup storage"),
-            backups.storageDirectory());
-        if (!directory.isEmpty()) {
-            QString error;
-            if (!BackupService::configureStorageDirectory(settings, JsonParser::paths(), directory, error))
-                QMessageBox::warning(this, tr("Backup storage"), error);
-        }
-    } else if (dialog.clickedButton() == restore) {
-        QList<BackupSnapshot> snapshots;
-        QString error;
-        if (!backups.list(snapshots, error)) {
-            QMessageBox::warning(this, tr("Cannot list snapshots"), error);
-            return;
-        }
-        QStringList options;
-        for (const auto &snapshot : snapshots) {
-            const auto kind = snapshot.kind == BackupKind::Legacy ? tr("Legacy") :
-                snapshot.kind == BackupKind::Safety ? tr("Automatic safety") : tr("Full save");
-            options.append(QString("%1 | %2 | %3 | %4").arg(
-                snapshot.id, kind, snapshot.label, snapshot.valid ? tr("Verified") : tr("Invalid")));
-        }
-        if (options.isEmpty()) {
-            QMessageBox::information(this, tr("Restore snapshot"), tr("No snapshots found. Import a legacy backup or choose the correct storage folder."));
-            return;
-        }
-        bool accepted = false;
-        const auto selected = QInputDialog::getItem(this, tr("Restore snapshot"), tr("Select snapshot"),
-                                                    options, 0, false, &accepted);
-        const auto index = options.indexOf(selected);
-        if (accepted && index >= 0) restoreSnapshot(snapshots[index].id);
-    } else if (dialog.clickedButton() == create || dialog.clickedButton() == legacy) {
-        BackupSnapshot snapshot;
-        QString error;
-        const bool success = dialog.clickedButton() == create
-            ? backups.createSnapshot({}, snapshot, error)
-            : backups.importLegacy(tr("Legacy editor backup"), snapshot, error);
-        if (success)
-            QMessageBox::information(this, tr("Backup created"),
-                tr("Snapshot verified and saved in %1").arg(backups.storageDirectory() + "/" + snapshot.id));
-        else
-            QMessageBox::warning(this, tr("Backup not created"), error);
-    } else if (dialog.clickedButton() == open) {
-        if (!QDesktopServices::openUrl(QUrl::fromLocalFile(JsonParser::paths().directory())))
-            QMessageBox::warning(this, tr("Recovery"), tr("Could not open the save directory."));
-    } else if (dialog.clickedButton() == reload) {
-        QString error;
-        JsonParser::init(error);
-        loadGameSaves();
-        showSaveStatus(error);
-        emit saveRestored();
-    }
+    BackupManager::open(this);
 }
 
-void Tab_Settings::restoreSnapshot(const QString &id)
+QString Tab_Settings::reloadSave()
 {
+    QString error;
+    const bool loaded = JsonParser::init(error);
+    loadGameSaves();
+    showSaveStatus(error);
+    emit saveRestored();
+    return loaded && error.isEmpty() ? tr("Save reloaded.") : tr("Reload result: %1").arg(error);
+}
+
+QString Tab_Settings::restoreSnapshot(const QString &id, QWidget *parent)
+{
+    QWidget *owner = parent ? parent : this;
     QSettings settings("DeathWhisper", "TLHoN_SE");
     RestoreService service(JsonParser::paths(), BackupService::configuredStorageDirectory(settings));
     RestorePreview preview;
     QString error;
     if (!RestoreService::gameClosed(error) || !service.preview(id, preview, error)) {
-        QMessageBox::warning(this, tr("Restore blocked"), error);
-        return;
+        QMessageBox::warning(owner, tr("Restore blocked"), error);
+        return tr("Restore blocked: %1").arg(error);
     }
     QString details = tr("Snapshot: %1\nSource: %2\nTarget: %3\n\nFiles:")
         .arg(preview.snapshot.id, preview.snapshot.sourceDirectory, preview.targetDirectory);
@@ -208,12 +170,13 @@ void Tab_Settings::restoreSnapshot(const QString &id)
     if (preview.primaryNeedsRecovery)
         warning += "\n\n" + tr("Recovery mode: the current primary is missing or corrupt. The safety snapshot will retain whatever bytes exist, including the exact absence of files.");
     QMessageBox confirm(QMessageBox::Warning, tr("Confirm restore"), warning,
-                        QMessageBox::Yes | QMessageBox::No, this);
+                        QMessageBox::Yes | QMessageBox::No, owner);
+    confirm.setTextFormat(Qt::PlainText);
     confirm.setDefaultButton(QMessageBox::No);
     confirm.setInformativeText(tr("Snapshot: %1\nTarget: %2\n%3").arg(
         preview.snapshot.id, preview.targetDirectory, summary.join("\n")));
     confirm.setDetailedText(details);
-    if (confirm.exec() != QMessageBox::Yes) return;
+    if (confirm.exec() != QMessageBox::Yes) return tr("Restore canceled.");
 
     BackupSnapshot safety;
     const bool restored = service.restore(preview, safety, error);
@@ -228,12 +191,18 @@ void Tab_Settings::restoreSnapshot(const QString &id)
     showSaveStatus(reloadError);
     emit saveRestored();
     if (restored) {
-        QMessageBox::information(this, tr("Restore complete"),
-            tr("Restored and verified. Pre-restore safety snapshot: %1").arg(safety.id) +
-            (reloadError.isEmpty() ? QString() : "\n" + reloadError));
-    } else {
-        QMessageBox::warning(this, tr("Restore not completed"), error);
+        const QString result = tr("Restored and verified. Pre-restore safety snapshot: %1").arg(safety.id) +
+            (reloadError.isEmpty() ? QString() : "\n" + tr("Reload warning: %1").arg(reloadError));
+        if (reloadError.isEmpty())
+            QMessageBox::information(owner, tr("Restore complete"), result);
+        else
+            QMessageBox::warning(owner, tr("Restore complete; reload needs attention"), result);
+        return result;
     }
+    const QString result = tr("Restore not completed: %1").arg(error) +
+        (reloadError.isEmpty() ? QString() : "\n" + reloadError);
+    QMessageBox::warning(owner, tr("Restore not completed"), result);
+    return result;
 }
 
 void Tab_Settings::on_cb_cheater_toggled(bool checked)
@@ -245,8 +214,10 @@ void Tab_Settings::on_cb_cheater_toggled(bool checked)
 
 void Tab_Settings::on_le_maxIconUses_editingFinished()
 {
-    if (characterId < 0) return;
-    const int max = qMax(1, ui->le_maxIconUses->text().toInt());
+    if (characterId < 0 || characterId >= JsonParser::characters().size() || !ui->le_maxIconUses->isEnabled()) return;
+    const int value = ui->le_maxIconUses->text().toInt();
+    if (value == JsonParser::characters()[characterId].character["maxIconUses"].toInt()) return;
+    const int max = qMax(1, value);
     QString error;
     const bool success = JsonParser::mutateCharacter(characterId, [max](SaveCharacter &slot) {
         slot.character["maxIconUses"] = max;
@@ -279,7 +250,7 @@ void Tab_Settings::on_cb_language_currentIndexChanged(int index)
 
     qInfo() << "Changing language to [" << language <<']';
     emit ui->retranslateUi(this);
-    ui->l_saveStatus->setText(saveStatus);
+    refreshEditingAvailability();
     emit languageChanged();
 
     on_cb_saves_currentIndexChanged(characterId);

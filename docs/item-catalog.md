@@ -84,6 +84,7 @@ ownership detection, and UI selection are separate work.
 | `category` | armor, weapon, shield, other |
 | `type`, `typeVerified` | Path-derived category/subfolder hint or reviewed type; verified flag is true only when explicit type metadata is supplied |
 | `slot` | Empty until explicitly reviewed; armor slots are helm, torso, arms, legs |
+| `equipmentSlots` | Explicit reviewed slot eligibility; empty if absent (see equipment service) |
 | `displayName`, `displayNameVerified` | Verified name from review if available (flag true); otherwise exact GUID |
 | `dlc` | unknown, dlc-path (path hint), base, dlc (requires entitlement) |
 | `availability` | unresolved, excluded, validated |
@@ -162,6 +163,11 @@ a review, bulk eligibility is empty. Even a reviewed DLC entry requires
 an explicit entitlement decision by the caller (default false).
 A validated entry is not by itself authorization to write a save or an
 assertion that instance factory defaults are correct.
+
+DIG-125 extends review with optional explicitly verified hand compatibility
+and an equipment-only review status, which does **not** enable item grants.
+See [equipment service](equipment-service.md) for exact slot names, review
+rules, eligibility and fixture limitations.
 
 ## Validation evidence and outstanding qualification
 

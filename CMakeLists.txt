@@ -21,6 +21,7 @@ add_library(savecore STATIC
     jsonparser.h jsonparser.cpp
     inventorymodel.h inventorymodel.cpp
     inventoryproperties.h inventoryproperties.cpp
+    equipmentservice.h equipmentservice.cpp
 )
 target_link_libraries(savecore PUBLIC Qt6::Core tlhon_item_catalog)
 target_include_directories(savecore PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
@@ -55,6 +56,12 @@ install(TARGETS TLHoN_SE
 
 if(BUILD_TESTING)
     find_package(Qt6 REQUIRED COMPONENTS Test)
+    add_executable(equipment_tests tests/equipment_tests.cpp)
+    target_link_libraries(equipment_tests PRIVATE savecore Qt6::Test)
+    target_compile_definitions(equipment_tests PRIVATE FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/Resources/Tests")
+    add_test(NAME equipment_tests COMMAND equipment_tests
+        -o -,txt -o "${CMAKE_CURRENT_BINARY_DIR}/equipment_tests.txt,txt")
+
     add_executable(inventory_tests tests/inventory_tests.cpp)
     target_link_libraries(inventory_tests PRIVATE savecore Qt6::Test)
     target_compile_definitions(inventory_tests PRIVATE FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/Resources/Tests")

@@ -141,6 +141,43 @@ int main(int argc, char *argv[])
     CHECK(!catalog.find("DemoDlcArmor")->bulkEligible());
     CHECK(catalog.find("DemoDlcArmor")->bulkEligible(true));
 
+    // Equipment review adds no grant eligibility, and cannot be inferred
+    // from paths or an arbitrary reviewed type name.
+    auto equipmentReview = review;
+    auto equipOnly = reviewRow(*original.find("HealthPotion"));
+    equipOnly.insert("status", "equip");
+    equipOnly.insert("equipmentSlots", QJsonArray{"consumable"});
+    auto handReview = reviewRow(*original.find("AvatarBaseShield"));
+    handReview.insert("equipmentSlots", QJsonArray{"leftHand"});
+    equipmentReview.insert("entries", QJsonArray{equipOnly, handReview});
+    CHECK(writeReview(equipmentReview));
+    CHECK(load(source, catalog, error, reviewPath));
+    CHECK(catalog.find("HealthPotion")->equipmentSlots == QStringList{"consumable"});
+    CHECK(catalog.find("HealthPotion")->availability == Availability::Unresolved);
+    CHECK(!catalog.find("HealthPotion")->bulkEligible(true));
+    CHECK(catalog.find("AvatarBaseShield")->equipmentSlots == QStringList{"leftHand"});
+    CHECK(catalog.find("AvatarBaseShield")->bulkEligible());
+    CHECK(catalog.find("AvatarBaseSword")->equipmentSlots.isEmpty());
+
+    for (const auto &badSlots : QList<QJsonValue>{
+             QJsonValue("consumable"), QJsonArray{}, QJsonArray{"leftHand"},
+             QJsonArray{"ring", "consumable"}, QJsonArray{"consumable", "consumable"}}) {
+        auto invalidEquipmentRow = equipOnly;
+        invalidEquipmentRow.insert("equipmentSlots", badSlots);
+        equipmentReview.insert("entries", QJsonArray{invalidEquipmentRow});
+        CHECK(writeReview(equipmentReview));
+        CHECK(!load(source, catalog, error, reviewPath) && catalog.entries.isEmpty() && !error.isEmpty());
+    }
+    auto invalidHand = handReview;
+    invalidHand.insert("equipmentSlots", QJsonArray{"consumable"});
+    equipmentReview.insert("entries", QJsonArray{invalidHand});
+    CHECK(writeReview(equipmentReview));
+    CHECK(!load(source, catalog, error, reviewPath));
+    equipOnly.remove("equipmentSlots");
+    equipmentReview.insert("entries", QJsonArray{equipOnly});
+    CHECK(writeReview(equipmentReview));
+    CHECK(!load(source, catalog, error, reviewPath));
+
     // A nested DLC path must reject a base-game review even when every other
     // field is valid. Use a single validly-shaped row to isolate the DLC check
     // (not an accidental rejection for a duplicate review).

@@ -1,35 +1,19 @@
 #ifndef JSONPARSER_H
 #define JSONPARSER_H
 
-#include <QJsonDocument>
-#include <QJsonArray>
-#include <QJsonObject>
-#include <QJsonParseError>
-#include <QProcessEnvironment>
+#include "savestore.h"
 
+// App-level facade; no UI or filesystem work inside the envelope codec.
 class JsonParser
 {
-    static QList<QJsonObject> characterJson;
-    static QList<QJsonObject> infoJson;
-    static QList<QJsonObject> questJson;
-    static QList<QString> misc;
-    static inline QString appdata = QProcessEnvironment::systemEnvironment().value("AppData");
-    static const inline QString path = "LocalLow\\OverTheMoon\\TLHON\\SaveData.txt";
-
 public:
     JsonParser() = delete;
-    JsonParser(JsonParser&) = delete;
-    JsonParser(JsonParser&&) = delete;
-
-    static void init();
-
-    static QList<QJsonObject>& getCharacterJson();
-    static QList<QJsonObject>& getInfoJson();
-    static QList<QJsonObject>& getQuestJson();
-
-    static void write();
-
-    static void clear();
+    static void configure(const SavePaths &paths);
+    static bool init(QString &error);
+    static const SavePaths &paths();
+    static const QList<SaveCharacter> &characters();
+    static bool canEdit();
+    static bool mutateCharacter(int index, const std::function<void(SaveCharacter &)> &mutation, QString &error);
 };
 
-#endif // JSONPARSER_H
+#endif

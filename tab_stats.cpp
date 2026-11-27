@@ -6,6 +6,11 @@
 #include "positiveintvalidator.h"
 
 #include <QMessageBox>
+#include <QJsonArray>
+#include <QRegularExpression>
+#include <QSignalBlocker>
+#include <QUuid>
+#include <cmath>
 
 enum
 {
@@ -97,7 +102,7 @@ Tab_Stats::Tab_Stats(QWidget *parent) :
     connect(ui->cb_unburdened, &QCheckBox::toggled, [this](bool) { setCheat("itemsHoovered",      71); });
     connect(ui->cb_DLC,        &QCheckBox::toggled, [this](bool) { setCheat("DLCItemsRemembered", 10); });
 
-    connect(ui->cb_help,       &QCheckBox::toggled, [this](bool) { setCheat("bossFightAssistances", 0, JsonParser::getInfoJson()); });
+    connect(ui->cb_help,       &QCheckBox::toggled, [this](bool) { setCheat("bossFightAssistances", 0, true); });
 
     const QList<QString> spells =
         {
@@ -248,63 +253,74 @@ void Tab_Stats::initSettings(Tab_Settings *s)
 
 void Tab_Stats::le_textChanged(QString param, QString text)
 {
-    qInfo() << param << " = " << text;
-    if(isBlockSignal) return;
-
-    auto& json = JsonParser::getCharacterJson();
-    json[id][param] = text.toInt();
-
-    JsonParser::write();
+    if (isBlockSignal || id < 0) return;
+    applyMutation([&](SaveCharacter &slot) { slot.character[param] = text.toInt(); });
 }
 
-void Tab_Stats::setCheat(QString param, int value, QList<QJsonObject> &json)
+void Tab_Stats::setCheat(QString param, int value, bool info)
 {
-    qInfo() << param << " = " << value;
-    if(isBlockSignal) return;
+    if (isBlockSignal || id < 0) return;
+    if (!applyMutation([&](SaveCharacter &slot) {
+        (info ? slot.info : slot.character)[param] = value;
+    }) && info) {
+        const QSignalBlocker blocker(ui->cb_help);
+        ui->cb_help->setChecked(false);
+    }
+}
 
-    json[id][param] = value;
-
-    JsonParser::write();
-
+bool Tab_Stats::applyMutation(const std::function<void(SaveCharacter &)> &mutation)
+{
+    QString error;
+    const bool success = JsonParser::mutateCharacter(id, mutation, error);
     update();
+    if (!success)
+        QMessageBox::warning(this, tr("Save not changed"), error);
+    return success;
 }
 
 void Tab_Stats::update()
 {
     id = Tab_Settings::getCharacterId();
-    auto& json = JsonParser::getCharacterJson();
-
+    const auto &characters = JsonParser::characters();
     isBlockSignal = true;
+    const bool selected = id >= 0 && id < characters.size();
+    setEnabled(selected && JsonParser::canEdit());
+    if (!selected) {
+        ui->l_nickname->setText(tr("No character"));
+        isBlockSignal = false;
+        return;
+    }
+    const auto &json = characters[id].character;
 
-    ui->l_nickname->setText(json[id]["name"].toString());
+    ui->l_nickname->setText(json["name"].toString());
 
-    ui->l_class->setText(getClass(json[id]["playerClass"].toInt()));
-    ui->l_level->setText(QString::number(json[id]["level"].toInt()));
-    ui->l_health->setText(QString::number(floor(json[id]["health"].toDouble())));
+    ui->l_class->setText(getClass(json["playerClass"].toInt()));
+    ui->l_level->setText(QString::number(json["level"].toInt()));
+    ui->l_health->setText(QString::number(floor(json["health"].toDouble())));
     ui->l_stamina->setText("[NULL]");
 
-    ui->le_memory->setText(QString::number(json[id]["memory"].toInt()));
+    ui->le_memory->setText(QString::number(json["memory"].toInt()));
     ui->l_required->setText("[NULL]");
 
-    ui->le_stat_vitality->setText(QString::number(json[id]["_stat_vitality"].toInt()));
-    ui->le_stat_stamina->setText(QString::number(json[id]["_stat_stamina"].toInt()));
-    ui->le_stat_equipLoad->setText(QString::number(json[id]["_stat_equipLoad"].toInt()));
-    ui->le_stat_strength->setText(QString::number(json[id]["_stat_strength"].toInt()));
-    ui->le_stat_dexterity->setText(QString::number(json[id]["_stat_dexterity"].toInt()));
-    ui->le_stat_attunement->setText(QString::number(json[id]["_stat_attunement"].toInt()));
-    ui->le_stat_luck->setText(QString::number(json[id]["_stat_luck"].toInt()));
+    ui->le_stat_vitality->setText(QString::number(json["_stat_vitality"].toInt()));
+    ui->le_stat_stamina->setText(QString::number(json["_stat_stamina"].toInt()));
+    ui->le_stat_equipLoad->setText(QString::number(json["_stat_equipLoad"].toInt()));
+    ui->le_stat_strength->setText(QString::number(json["_stat_strength"].toInt()));
+    ui->le_stat_dexterity->setText(QString::number(json["_stat_dexterity"].toInt()));
+    ui->le_stat_attunement->setText(QString::number(json["_stat_attunement"].toInt()));
+    ui->le_stat_luck->setText(QString::number(json["_stat_luck"].toInt()));
 
     ui->l_faded->setText("[NULL]");
-    ui->l_remembered->setText(QString::number(json[id]["itemsRemembered"].toInt()));
-    ui->l_unburdened->setText(QString::number(json[id]["itemsHoovered"].toInt()));
-    ui->l_DLC->setText(QString::number(json[id]["DLCItemsRemembered"].toInt()));
+    ui->l_remembered->setText(QString::number(json["itemsRemembered"].toInt()));
+    ui->l_unburdened->setText(QString::number(json["itemsHoovered"].toInt()));
+    ui->l_DLC->setText(QString::number(json["DLCItemsRemembered"].toInt()));
 
-    disableIfCompleted(ui->cb_backstabs,   json[id]["backstabCount"].toInt(),        20);
-    disableIfCompleted(ui->cb_repostes,    json[id]["reposteCount"].toInt(),         20);
-    disableIfCompleted(ui->cb_rebuffs,     json[id]["rebuffCount"].toInt(),          20);
-    disableIfCompleted(ui->cb_remembered,  json[id]["itemsRemembered"].toInt(),      75);
-    disableIfCompleted(ui->cb_unburdened,  json[id]["itemsHoovered"].toInt(),        71);
-    disableIfCompleted(ui->cb_DLC,         json[id]["DLCItemsRemembered"].toInt(),   10);
+    disableIfCompleted(ui->cb_backstabs,   json["backstabCount"].toInt(),        20);
+    disableIfCompleted(ui->cb_repostes,    json["reposteCount"].toInt(),         20);
+    disableIfCompleted(ui->cb_rebuffs,     json["rebuffCount"].toInt(),          20);
+    disableIfCompleted(ui->cb_remembered,  json["itemsRemembered"].toInt(),      75);
+    disableIfCompleted(ui->cb_unburdened,  json["itemsHoovered"].toInt(),        71);
+    disableIfCompleted(ui->cb_DLC,         json["DLCItemsRemembered"].toInt(),   10);
 
     isBlockSignal = false;
 }
@@ -329,9 +345,9 @@ void Tab_Stats::on_btn_cheat_toggled(bool checked)
 
 void Tab_Stats::all_item_cheat(QCheckBox* cb, const QList<QString>& items, const QString& regex)
 {
-    qInfo() << "regex: " << regex;
-    auto& json = JsonParser::getCharacterJson();
-    QJsonArray inventory = json[id]["inventory"].toArray();
+    if (isBlockSignal || !cb->isChecked() ||
+        id < 0 || id >= JsonParser::characters().size()) return;
+    QJsonArray inventory = JsonParser::characters()[id].character["inventory"].toArray();
     QList<QString> copy = items;
 
     for(size_t i = 0; i < inventory.size(); ++i)
@@ -353,27 +369,23 @@ void Tab_Stats::all_item_cheat(QCheckBox* cb, const QList<QString>& items, const
     for(const auto& item : copy)
         inventory.append(createNewItem(item));
 
-    json[id]["inventory"] = inventory;
-    JsonParser::write();
+    if (!applyMutation([&](SaveCharacter &slot) { slot.character["inventory"] = inventory; })) {
+        const QSignalBlocker blocker(cb);
+        cb->setChecked(false);
+    }
 }
 
-void Tab_Stats::on_cb_restore_quests_toggled(bool)
+void Tab_Stats::on_cb_restore_quests_toggled(bool checked)
 {
-    qInfo() << "Restoring quests";
-    auto& quests = JsonParser::getQuestJson();
-
-    quests[id]["questStage_BrendenMerkle"] = 10;
-    quests[id]["questStage_ChainedHero"]   = 10;
-    quests[id]["questStage_Heir"]          = 10;
-    quests[id]["questStage_Hoover"]        = 10;
-    quests[id]["questStage_Innocent"]      = 10;
-    quests[id]["questStage_Maiden"]        = 10;
-    quests[id]["questStage_Nameless"]      = 10;
-    quests[id]["questStage_Sando"]         = 10;
-    quests[id]["questStage_Sco"]           = 10;
-    quests[id]["questStage_Shopkeeper"]    = 10;
-    quests[id]["questStage_TheSmith"]      = 10;
-
-    JsonParser::write();
+    if (!checked || isBlockSignal || id < 0) return;
+    if (!applyMutation([](SaveCharacter &slot) {
+        for (const auto *key : {"questStage_BrendenMerkle", "questStage_ChainedHero",
+                "questStage_Heir", "questStage_Hoover", "questStage_Innocent",
+                "questStage_Maiden", "questStage_Nameless", "questStage_Sando",
+                "questStage_Sco", "questStage_Shopkeeper", "questStage_TheSmith"})
+            slot.quests[QLatin1String(key)] = 10;
+    })) {
+        const QSignalBlocker blocker(ui->cb_restore_quests);
+        ui->cb_restore_quests->setChecked(false);
+    }
 }
-

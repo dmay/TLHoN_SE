@@ -5,6 +5,8 @@
 #include <QApplication>
 #include <QFile>
 #include <QDateTime>
+#include <QCommandLineParser>
+#include <QTextStream>
 
 void messageHandler(QtMsgType type, const QMessageLogContext &context, const QString &msg)
 {
@@ -42,8 +44,19 @@ int main(int argc, char *argv[])
     qInfo() << "Started new session";
     QApplication a(argc, argv);
 
-    JsonParser::init();
+    QCommandLineParser parser;
+    parser.setApplicationDescription("TLHoN Save Editor");
+    parser.addHelpOption();
+    const QCommandLineOption saveDir("save-dir", "Use a disposable or alternate save directory.", "directory");
+    parser.addOption(saveDir);
+    parser.process(a);
+    JsonParser::configure(SavePaths(parser.value(saveDir)));
+    qInfo() << "Save directory:" << JsonParser::paths().directory();
+
+    QString error;
+    JsonParser::init(error);
     MainWindow w;
+    w.setSaveStatus(error);
 
     setStyleFromFile(&w, ":/Resources/StyleSheets/Global.qss");
 

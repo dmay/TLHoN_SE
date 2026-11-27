@@ -16,12 +16,13 @@ public:
     explicit Tab_Settings(QWidget *parent = nullptr);
     static int getCharacterId();
     void restoreSettings();
+    void showSaveStatus(const QString &error);
+    void loadGameSaves();
     ~Tab_Settings();
 
 private:
     void    saveSettings(const QString &key, const QString &value);
     QString loadSettings(const QString &key);
-    void loadGameSaves();
 
 signals:
     void characterChanged();
@@ -39,6 +40,7 @@ private slots:
 private:
     Ui::Tab_Settings *ui;
     QTranslator translator;
+    QString saveStatus;
     static QString language;
     static int characterId;
     class PositiveIntValidator* validator;

@@ -44,11 +44,11 @@ MainWindow::MainWindow(QWidget *parent) :
     checked_label = ui->l_help;
     ui->btn_help->setChecked(true);
 
-    connect(ui->btn_equipment, &QPushButton::toggled, [this]() { onTabButtonClicked(ui->btn_equipment, ui->l_equipment, 0); });
-    connect(ui->btn_inventory, &QPushButton::toggled, [this]() { onTabButtonClicked(ui->btn_inventory, ui->l_inventory, 1); });
-    connect(ui->btn_stats,     &QPushButton::toggled, [this]() { onTabButtonClicked(ui->btn_stats,     ui->l_stats,     2); });
-    connect(ui->btn_settings,  &QPushButton::toggled, [this]() { onTabButtonClicked(ui->btn_settings,  ui->l_settings,  3); });
-    connect(ui->btn_help,      &QPushButton::toggled, [this]() { onTabButtonClicked(ui->btn_help,      ui->l_help,      4); });
+    connect(ui->btn_equipment, &QPushButton::toggled, [this](bool checked) { if (checked) onTabButtonClicked(ui->btn_equipment, ui->l_equipment, 0); });
+    connect(ui->btn_inventory, &QPushButton::toggled, [this](bool checked) { if (checked) onTabButtonClicked(ui->btn_inventory, ui->l_inventory, 1); });
+    connect(ui->btn_stats,     &QPushButton::toggled, [this](bool checked) { if (checked) onTabButtonClicked(ui->btn_stats,     ui->l_stats,     2); });
+    connect(ui->btn_settings,  &QPushButton::toggled, [this](bool checked) { if (checked) onTabButtonClicked(ui->btn_settings,  ui->l_settings,  3); });
+    connect(ui->btn_help,      &QPushButton::toggled, [this](bool checked) { if (checked) onTabButtonClicked(ui->btn_help,      ui->l_help,      4); });
 
     connect(tab_settings, &Tab_Settings::languageChanged, [this]() { emit ui->retranslateUi(this); });
 
@@ -60,6 +60,13 @@ MainWindow::MainWindow(QWidget *parent) :
     tab_settings->restoreSettings();
 }
 
+void MainWindow::setSaveStatus(const QString &error)
+{
+    tab_settings->showSaveStatus(error);
+    if (!JsonParser::canEdit())
+        ui->btn_settings->setChecked(true);
+}
+
 void MainWindow::onTabButtonClicked(QPushButton *button, QLabel *label, int tabIndex)
 {
     if(checked_btn != button)
@@ -68,6 +75,7 @@ void MainWindow::onTabButtonClicked(QPushButton *button, QLabel *label, int tabI
         button->setEnabled(false);
     }
 
+    if (checked_btn == button) return;
     checked_btn->setChecked(false);
     checked_label->setVisible(false);
 

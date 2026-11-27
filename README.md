@@ -62,3 +62,51 @@ In this section, you can change any characteristic to any value, even exceeding 
 | Everything is standard here: language change, character selection, and editing the number of icons, and something interesting. | A small greeting, links to my contacts, and the ability to report any found errors. |
 | ![4_en](https://github.com/user-attachments/assets/bb69129b-3685-4720-87e3-3d337b14eecb) | ![5_en](https://github.com/user-attachments/assets/a16e6116-9647-4ab7-84b0-ba86f9e4c414) |
 
+
+## Development and save safety
+
+Build with Qt 6 (Windows CI uses Qt 6.8.3, MSVC x64), CMake 3.16+ and a C++17 compiler:
+
+```powershell
+cmake -S . -B build -A x64 -DBUILD_TESTING=ON
+cmake --build build --config Release --parallel
+ctest --test-dir build -C Release --output-on-failure
+```
+
+Install the MSVC Qt 6 kit and set `CMAKE_PREFIX_PATH` to its kit directory if
+CMake does not find Qt. Tests use disposable temporary directories and existing
+repository fixtures, never the active game saves.
+
+The editor defaults to `%USERPROFILE%\AppData\LocalLow\OverTheMoon\TLHON`.
+To test with a copied save instead, launch with an explicit directory:
+
+```powershell
+.\build\Release\TLHoN_SE.exe --save-dir "C:\temp\tlhon-test"
+```
+
+Close the game before editing. Each edit compares the active file to the
+loaded bytes before staging and again immediately before atomically replacing
+it; a lock coordinates editor instances. This cannot prevent a game or another
+program that ignores the lock from writing in the final check/replace window.
+The game backup (`SaveData.txt.bak`) and any existing legacy editor backup
+(`SaveData.txt_bckp`) are left untouched. The recovery entry in Settings can
+open the save directory or reload a recovered file; full snapshot management
+and safe restore are tracked separately.
+
+### Save access API
+
+- `SavePaths` resolves the directory and each distinct filename.
+- `SaveDocument::parse` / `serialize` work on bytes without filesystem access.
+  The settings object, three required objects per character and envelope
+  delimiters are validated. The miscellaneous section must be present;
+  object-shaped chunks are checked for valid JSON, and opaque chunks are
+  preserved without assuming a schema. Unchanged objects, delimiters and
+  miscellaneous sections are returned byte-for-byte.
+- `SaveStore` loads the envelope and owns the last known-good state.
+  `mutateCharacter(index, callback, error)` edits a detached copy and only
+  publishes it in memory after successful persistence. A failed reload
+  prevents mutation of retained stale state.
+- App widgets use the `JsonParser` facade: read-only `characters()`, `paths()`,
+  `canEdit()`, `init(error)` to reload, and `mutateCharacter` for writes.
+  After successful recovery, Settings can call `loadGameSaves()` and emit
+  `saveRestored` so other tabs refresh.

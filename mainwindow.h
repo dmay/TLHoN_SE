@@ -16,6 +16,7 @@ class MainWindow : public QMainWindow
 public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
+    void setSaveStatus(const QString &error);
 
 private slots:
     void onTabButtonClicked(class QPushButton *button, class QLabel* label, int tabIndex);

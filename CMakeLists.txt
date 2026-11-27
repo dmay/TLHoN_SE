@@ -1,85 +1,60 @@
 cmake_minimum_required(VERSION 3.16)
-
 project(TLHoN_SE VERSION 0.1 LANGUAGES CXX)
 
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
-
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets)
-find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets)# Core LinguistTools)
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets)
 
-set(PROJECT_SOURCES
-        main.cpp
-        mainwindow.cpp
-        mainwindow.h
-        mainwindow.ui
-        file.rc
+add_library(savecore STATIC
+    savepaths.h savepaths.cpp
+    savedocument.h savedocument.cpp
+    savestore.h savestore.cpp
+    jsonparser.h jsonparser.cpp
 )
+target_link_libraries(savecore PUBLIC Qt6::Core)
+target_include_directories(savecore PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
-if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
-    qt_add_executable(TLHoN_SE
-        MANUAL_FINALIZATION
-        ${PROJECT_SOURCES}
-        resource.qrc
-        stylefromfile.cpp stylefromfile.h
-        jsonparser.h jsonparser.cpp
-        tab_stats.cpp tab_stats.h tab_stats.ui
-        tab_equipment.h tab_equipment.cpp tab_equipment.ui
-        tab_settings.h tab_settings.cpp tab_settings.ui
-        tab_about.h tab_about.cpp tab_about.ui
-        positiveintvalidator.h positiveintvalidator.cpp
-
-    )
-# Define target properties for Android with Qt 6 as:
-#    set_property(TARGET TLHoN_SE APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR
-#                 ${CMAKE_CURRENT_SOURCE_DIR}/android)
-# For more information, see https://doc.qt.io/qt-6/qt-add-executable.html#target-creation
-else()
-    if(ANDROID)
-        add_library(TLHoN_SE SHARED
-            ${PROJECT_SOURCES}
-        )
-# Define properties for Android with Qt 5 after find_package() calls as:
-#    set(ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/android")
-    else()
-        add_executable(TLHoN_SE
-            ${PROJECT_SOURCES}
-        )
-    endif()
+set(EDITOR_SOURCES
+    mainwindow.cpp mainwindow.h mainwindow.ui
+    stylefromfile.cpp stylefromfile.h
+    tab_stats.cpp tab_stats.h tab_stats.ui
+    tab_equipment.cpp tab_equipment.h tab_equipment.ui
+    tab_settings.cpp tab_settings.h tab_settings.ui
+    tab_about.cpp tab_about.h tab_about.ui
+    positiveintvalidator.cpp positiveintvalidator.h
+    resource.qrc
+)
+# The upstream file.rc is not tracked. Allow local resource customization
+# without requiring a missing file in a clean checkout.
+if(WIN32 AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/file.rc")
+    list(APPEND EDITOR_SOURCES file.rc)
 endif()
 
-target_link_libraries(TLHoN_SE PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)
-
-# Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
-# If you are developing for iOS or macOS you should consider setting an
-# explicit, fixed bundle identifier manually though.
-if(${QT_VERSION} VERSION_LESS 6.1.0)
-  set(BUNDLE_ID_OPTION MACOSX_BUNDLE_GUI_IDENTIFIER com.example.TLHoN_SE)
-endif()
-set_target_properties(TLHoN_SE PROPERTIES
-    ${BUNDLE_ID_OPTION}
+qt_add_executable(TLHoN_SE main.cpp ${EDITOR_SOURCES})
+target_link_libraries(TLHoN_SE PRIVATE Qt6::Widgets savecore)
+set_target_properties(TLHoN_SE PROPERTIES WIN32_EXECUTABLE TRUE MACOSX_BUNDLE TRUE
     MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}
-    MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}
-    MACOSX_BUNDLE TRUE
-    WIN32_EXECUTABLE TRUE
-)
-
+    MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR})
 include(GNUInstallDirs)
 install(TARGETS TLHoN_SE
     BUNDLE DESTINATION .
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-)
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
-if(QT_VERSION_MAJOR EQUAL 6)
-    qt_finalize_executable(TLHoN_SE)
+include(CTest)
+if(BUILD_TESTING)
+    find_package(Qt6 REQUIRED COMPONENTS Test)
+    add_executable(savecore_tests tests/savecore_tests.cpp)
+    target_link_libraries(savecore_tests PRIVATE savecore Qt6::Test)
+    target_compile_definitions(savecore_tests PRIVATE FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/Resources/Tests")
+    add_test(NAME savecore_tests COMMAND savecore_tests)
+
+    add_executable(editor_tests tests/editor_tests.cpp ${EDITOR_SOURCES})
+    target_link_libraries(editor_tests PRIVATE savecore Qt6::Widgets Qt6::Test)
+    target_compile_definitions(editor_tests PRIVATE FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/Resources/Tests")
+    add_test(NAME editor_tests COMMAND editor_tests)
+    set_tests_properties(editor_tests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 endif()
-
-# add_custom_target(lupdate
-#     COMMAND ${Qt6_LUPDATE_EXECUTABLE} ${CMAKE_SOURCE_DIR} -ts ${CMAKE_SOURCE_DIR}/translations/TLHoN_SE_language.ts
-#     COMMENT "Updating translation files"
-# )

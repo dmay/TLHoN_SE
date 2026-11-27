@@ -13,7 +13,7 @@ class Tab_Stats : public QWidget
 {
     Q_OBJECT
 
-    int id = 0;
+    int id = -1;
     bool isBlockSignal = false;
 public:
     explicit Tab_Stats(QWidget *parent = nullptr);
@@ -29,7 +29,8 @@ private slots:
 private:
     void update();
     void le_textChanged(QString param, QString text);
-    void setCheat(QString param, int value, QList<QJsonObject>& json = JsonParser::getCharacterJson());
+    void setCheat(QString param, int value, bool info = false);
+    bool applyMutation(const std::function<void(SaveCharacter &)> &mutation);
 
 private:
     Ui::Tab_stats *ui;

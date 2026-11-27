@@ -1,0 +1,28 @@
+{
+  "m_LocatorId": "synthetic-test-only",
+  "m_BuildResultHash": "synthetic-test-hash",
+  "m_InternalIds": [
+    "Assets/Design/GameplayData/Items/StartingArmors/Starting_Knight_Helm.asset",
+    "Assets/Design/GameplayData/Items/Armour/WelcomeArmour_TopHat.asset",
+    "Assets/Design/GameplayData/Items/Armour/DemoArmor.asset",
+    "Assets/Design/GameplayData/Items/Armour/DemoArmor.asset",
+    "Assets/Design/GameplayData/Items/Armour/demoArmor.asset",
+    "Assets/Design/GameplayData/Items/DLCArmours/DemoDlcArmor.asset",
+    "Assets/Design/GameplayData/Items/Weapons/Swords/AvatarBaseSword.asset",
+    "Assets/Design/GameplayData/Items/Shields/AvatarBaseShield.asset",
+    "Assets/Design/GameplayData/Items/Weapons/Shields/DemoNestedShield.asset",
+    "Assets/Design/GameplayData/Items/Weapons/BaseTypes/BaseSword.asset",
+    "Assets/Design/GameplayData/Items/Weapons/Swords/PrototypeSword.asset",
+    "Assets/Design/GameplayData/Items/Armour/Placeholder.asset",
+    "Assets/Design/GameplayData/Items/Armour/Textures/ArmorIcon.asset",
+    "Assets/Design/GameplayData/Items/Armour/Conflict.asset",
+    "Assets/Design/GameplayData/Items/Weapons/Swords/Conflict.asset",
+    "Assets/Design/GameplayData/Items/Consumables/HealthPotion.asset",
+    "Assets/Design/GameplayData/Items/Weapons/Swords/DemoSword.prefab",
+    "Assets/Design/GameplayData/Items/Armour/DemoArmor.mat",
+    "Assets/Design/GameplayData/Items/Armour/DemoArmor.png",
+    "Assets/Design/GameplayData/ItemsExtra/Fake.asset",
+    "Assets/Design/GameplayData/Models/Weapon.asset",
+    "{UnityEngine.AddressableAssets.Addressables.RuntimePath}/StandaloneWindows64/example.bundle"
+  ]
+}

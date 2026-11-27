@@ -25,6 +25,8 @@ You will be able to:
 * Editing the stats of individual inventory items
 * Editing equipped items
 
+Development: [read-only item catalog inspection and validation](docs/item-catalog.md).
+
 ### What may be added
 * A challenges tab with the ability to check their completion
 

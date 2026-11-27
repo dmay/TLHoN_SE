@@ -158,7 +158,23 @@ bool Tab_Inventory::loadCatalog(const ItemCatalog::Source &newSource, const QStr
     ui->dlcEntitled->setChecked(false);
     ui->bulkQualified->setChecked(false);
     refresh();
+    emit catalogChanged();
     return catalogLoaded;
+}
+
+bool Tab_Inventory::verifyEquipmentCatalog(ItemCatalog::Catalog &verified, QString &error) const
+{
+    if (!catalogLoaded) {
+        verified = {};
+        error.clear();
+        return true; // fixture-observed eligibility only
+    }
+    if (!ItemCatalog::load(source, verified, error, reviewPath)) return false;
+    if (verified.report() != catalog.report()) {
+        error = tr("Каталог или проверенный список изменились. Перезагрузите каталог.");
+        return false;
+    }
+    return true;
 }
 
 void Tab_Inventory::chooseCatalog()

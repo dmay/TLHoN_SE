@@ -20,9 +20,12 @@ public:
     void addAllArmor();
     void addAllWeapons();
     void refresh();
+    const ItemCatalog::Catalog &equipmentCatalog() const { return catalog; }
+    bool verifyEquipmentCatalog(ItemCatalog::Catalog &verified, QString &error) const;
 
 signals:
     void inventoryChanged();
+    void catalogChanged();
 
 protected:
     void showEvent(QShowEvent *event) override;

@@ -2,10 +2,13 @@
 #include "ui_tab_settings.h"
 
 #include "jsonparser.h"
+#include "backupservice.h"
 #include "stylefromfile.h"
 #include "positiveintvalidator.h"
 
 #include <QDesktopServices>
+#include <QFileDialog>
+#include <QFileInfo>
 #include <QMessageBox>
 #include <QSignalBlocker>
 #include <QUrl>
@@ -92,17 +95,43 @@ void Tab_Settings::showSaveStatus(const QString &error)
 
 void Tab_Settings::on_btn_restore_clicked()
 {
-    // DIG-120 will replace this recovery entry point with the snapshot manager.
-    // Never remove or rename active saves or the legacy backup here.
+    // DIG-120 will replace this temporary entry point with the full catalog
+    // and restore UI. Storage and capture already work without a parsed save.
+    QSettings settings("DeathWhisper", "TLHoN_SE");
+    BackupService backups(JsonParser::paths(), BackupService::configuredStorageDirectory(settings));
     QMessageBox dialog(QMessageBox::Information, tr("Backup / recovery"),
-        tr("Close the game before recovering or editing saves. The legacy editor backup is preserved. "
-           "The snapshot manager is not yet available. Open the save folder to recover manually, "
-           "then reload the recovered save.") + "\n\n" + JsonParser::paths().directory(),
+        tr("Close the game before creating or recovering backups. Snapshots copy the complete save, "
+           "not just the selected character. Restoring snapshots will be available in the Backup Manager.") +
+        "\n\n" + tr("Save folder: %1").arg(JsonParser::paths().directory()) +
+        "\n" + tr("Backup storage: %1").arg(backups.storageDirectory()),
         QMessageBox::Close, this);
+    auto *create = dialog.addButton(tr("Create backup"), QMessageBox::ActionRole);
+    auto *choose = dialog.addButton(tr("Choose backup folder"), QMessageBox::ActionRole);
+    auto *legacy = dialog.addButton(tr("Import legacy backup"), QMessageBox::ActionRole);
+    legacy->setEnabled(QFileInfo::exists(JsonParser::paths().legacyEditorBackup()));
     auto *open = dialog.addButton(tr("Open save folder"), QMessageBox::ActionRole);
     auto *reload = dialog.addButton(tr("Reload save"), QMessageBox::ActionRole);
     dialog.exec();
-    if (dialog.clickedButton() == open) {
+    if (dialog.clickedButton() == choose) {
+        const QString directory = QFileDialog::getExistingDirectory(this, tr("Choose backup storage"),
+            backups.storageDirectory());
+        if (!directory.isEmpty()) {
+            QString error;
+            if (!BackupService::configureStorageDirectory(settings, JsonParser::paths(), directory, error))
+                QMessageBox::warning(this, tr("Backup storage"), error);
+        }
+    } else if (dialog.clickedButton() == create || dialog.clickedButton() == legacy) {
+        BackupSnapshot snapshot;
+        QString error;
+        const bool success = dialog.clickedButton() == create
+            ? backups.createSnapshot({}, snapshot, error)
+            : backups.importLegacy(tr("Legacy editor backup"), snapshot, error);
+        if (success)
+            QMessageBox::information(this, tr("Backup created"),
+                tr("Snapshot verified and saved in %1").arg(backups.storageDirectory() + "/" + snapshot.id));
+        else
+            QMessageBox::warning(this, tr("Backup not created"), error);
+    } else if (dialog.clickedButton() == open) {
         if (!QDesktopServices::openUrl(QUrl::fromLocalFile(JsonParser::paths().directory())))
             QMessageBox::warning(this, tr("Recovery"), tr("Could not open the save directory."));
     } else if (dialog.clickedButton() == reload) {
